@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Natural Language to SQL AI Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-4 md:p-8">
+    <div class="max-w-4xl mx-auto space-y-6">
+
+        <header class="border-b border-slate-800 pb-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/30">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4"></path></svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight text-white">Natural Language to SQL AI Assistant</h1>
+                    <p class="text-sm text-slate-400">Conversational Text-to-SQL with charts, CSV export, and plain-English explanations.</p>
+                </div>
+            </div>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+                <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    SQLite v3.35 Engine Active
+                </div>
+                <div id="memoryBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                    Session memory: 0 turns
+                </div>
+            </div>
+        </header>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Database Schema</span>
+                <span class="text-xs bg-slate-800 px-2.5 py-1 rounded-md text-indigo-400 font-mono">4 Tables • Relational</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="bg-slate-950 rounded-xl p-3 border border-slate-800/80">
+                    <div class="flex items-center gap-2 text-indigo-400 font-semibold mb-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        categories
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-amber-400">id</span> <span class="text-slate-500">INTEGER PK</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-sky-400">name</span> <span class="text-slate-500">TEXT</span></div>
+                    </div>
+                </div>
+                <div class="bg-slate-950 rounded-xl p-3 border border-slate-800/80">
+                    <div class="flex items-center gap-2 text-indigo-400 font-semibold mb-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        brands
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-amber-400">id</span> <span class="text-slate-500">INTEGER PK</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-sky-400">name</span> <span class="text-slate-500">TEXT</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800 col-span-2"><span class="text-sky-400">country</span> <span class="text-slate-500">TEXT</span></div>
+                    </div>
+                </div>
+                <div class="bg-slate-950 rounded-xl p-3 border border-slate-800/80">
+                    <div class="flex items-center gap-2 text-indigo-400 font-semibold mb-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        products
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-amber-400">id</span> <span class="text-slate-500">INTEGER PK</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-sky-400">name</span> <span class="text-slate-500">TEXT</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-fuchsia-500/40"><span class="text-fuchsia-400">category_id</span> <span class="text-slate-500">FK</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-fuchsia-500/40"><span class="text-fuchsia-400">brand_id</span> <span class="text-slate-500">FK</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-emerald-400">price</span> <span class="text-slate-500">REAL</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-emerald-400">stock</span> <span class="text-slate-500">INTEGER</span></div>
+                    </div>
+                    <p class="mt-2 text-[10px] text-slate-500">category_id → categories.id · brand_id → brands.id</p>
+                </div>
+                <div class="bg-slate-950 rounded-xl p-3 border border-slate-800/80">
+                    <div class="flex items-center gap-2 text-indigo-400 font-semibold mb-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        orders
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-amber-400">id</span> <span class="text-slate-500">INTEGER PK</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-fuchsia-500/40"><span class="text-fuchsia-400">product_id</span> <span class="text-slate-500">FK</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-sky-400">customer_name</span> <span class="text-slate-500">TEXT</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-emerald-400">quantity</span> <span class="text-slate-500">INTEGER</span></div>
+                        <div class="bg-slate-900 p-2 rounded border border-slate-800 col-span-2"><span class="text-sky-400">order_date</span> <span class="text-slate-500">TEXT</span></div>
+                    </div>
+                    <p class="mt-2 text-[10px] text-slate-500">product_id → products.id</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Conversation Memory</span>
+                <button onclick="clearSession()" class="text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md border border-slate-700 transition">Clear session</button>
+            </div>
+            <div id="historyList" class="space-y-2 max-h-48 overflow-y-auto text-sm text-slate-500">
+                No previous questions in this session. Follow-ups like “How many of them were ordered?” will use this history.
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-400">Plain English Query Input</label>
+            <textarea id="promptInput" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 text-sm resize-none" placeholder="Ask a question, then follow up in context...">Show me Nike products</textarea>
+
+            <div class="space-y-2">
+                <span class="text-xs text-slate-500 font-medium">Suggestions / Prompts:</span>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="setQuery('Show me Nike products')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">Show me Nike products</button>
+                    <button onclick="setQuery('How many of them were ordered?')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">How many of them were ordered?</button>
+                    <button onclick="setQuery('Total quantity ordered per brand')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">Total quantity per brand</button>
+                    <button onclick="setQuery('Which customers ordered clothing items?')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">Customers who ordered clothing</button>
+                </div>
+            </div>
+
+            <button id="runButton" onclick="sendQuery()" class="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                <span id="runButtonLabel">Translate to SQL & Run</span>
+            </button>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Generated SQLite Query</span>
+                <span id="sqlStatus" class="text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded">Ready</span>
+            </div>
+            <div id="explanationBox" class="hidden bg-indigo-500/10 border border-indigo-500/20 text-indigo-100 text-sm rounded-xl p-3.5 leading-relaxed"></div>
+            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 font-mono text-sm text-emerald-400 overflow-x-auto min-h-[50px]">
+                <code id="sqlOutput" class="whitespace-pre-wrap">-- SQL query will appear here...</code>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Query Execution Results</span>
+                <button id="exportButton" onclick="exportCsv()" disabled class="text-xs font-medium text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg border border-emerald-500/20 transition">
+                    Export to CSV
+                </button>
+            </div>
+            <div id="dataOutput" class="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden min-h-[120px] flex items-center justify-center text-slate-500 text-sm p-4">
+                Click "Translate to SQL & Run" to execute a query and view results.
+            </div>
+            <div id="chartPanel" class="hidden bg-slate-950 rounded-xl border border-slate-800 p-4">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-3">Automatic Visualization</span>
+                <div class="relative h-64 md:h-80">
+                    <canvas id="resultsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CHART_COLORS = ["#818cf8", "#34d399", "#f472b6", "#38bdf8", "#fbbf24", "#a78bfa", "#fb7185", "#2dd4bf"];
+
+        let sessionHistory = [];
+        let lastResultData = [];
+        let lastSql = "";
+        let resultsChart = null;
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
+        function setQuery(text) {
+            document.getElementById("promptInput").value = text;
+            document.getElementById("promptInput").focus();
+        }
+
+        function updateMemoryBadge() {
+            document.getElementById("memoryBadge").textContent =
+                `Session memory: ${sessionHistory.length} turn${sessionHistory.length === 1 ? "" : "s"}`;
+        }
+
+        function renderHistory() {
+            const container = document.getElementById("historyList");
+
+            if (!sessionHistory.length) {
+                container.className = "space-y-2 max-h-48 overflow-y-auto text-sm text-slate-500";
+                container.innerHTML = "No previous questions in this session. Follow-ups like “How many of them were ordered?” will use this history.";
+                updateMemoryBadge();
+                return;
+            }
+
+            container.className = "space-y-2 max-h-48 overflow-y-auto";
+            container.innerHTML = sessionHistory.map((turn, index) => `
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                    <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Turn ${index + 1}</div>
+                    <div class="text-sm text-slate-200">${escapeHtml(turn.prompt)}</div>
+                </div>
+            `).join("");
+
+            updateMemoryBadge();
+        }
+
+        function clearSession() {
+            sessionHistory = [];
+            lastResultData = [];
+            lastSql = "";
+            renderHistory();
+            document.getElementById("sqlOutput").textContent = "-- SQL query will appear here...";
+            document.getElementById("explanationBox").classList.add("hidden");
+            document.getElementById("explanationBox").textContent = "";
+            document.getElementById("dataOutput").innerHTML = 'Click "Translate to SQL & Run" to execute a query and view results.';
+            document.getElementById("exportButton").disabled = true;
+            hideChart();
+        }
+
+        function setLoading(isLoading) {
+            const button = document.getElementById("runButton");
+            const label = document.getElementById("runButtonLabel");
+            button.disabled = isLoading;
+            label.textContent = isLoading ? "Thinking..." : "Translate to SQL & Run";
+            document.getElementById("sqlStatus").textContent = isLoading ? "Generating" : "Ready";
+        }
+
+        async function sendQuery() {
+            const prompt = document.getElementById("promptInput").value.trim();
+            if (!prompt) return;
+
+            setLoading(true);
+
+            try {
+                const response = await fetch("/api/ask", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        prompt,
+                        history: sessionHistory
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || "The assistant could not complete this request.");
+                }
+
+                lastSql = result.sql || "";
+                lastResultData = result.data || [];
+
+                document.getElementById("sqlOutput").textContent = lastSql;
+                document.getElementById("sqlStatus").textContent = `${result.count || 0} rows`;
+
+                const explanationBox = document.getElementById("explanationBox");
+                if (result.explanation) {
+                    explanationBox.textContent = result.explanation;
+                    explanationBox.classList.remove("hidden");
+                } else {
+                    explanationBox.classList.add("hidden");
+                }
+
+                renderTable(lastResultData);
+                renderChart(lastSql, lastResultData);
+
+                sessionHistory.push({
+                    prompt,
+                    sql: lastSql
+                });
+                renderHistory();
+            } catch (error) {
+                document.getElementById("sqlStatus").textContent = "Error";
+                document.getElementById("dataOutput").innerHTML =
+                    `<p class="text-red-400">${escapeHtml(error.message || "Error connecting to server backend.")}</p>`;
+                document.getElementById("exportButton").disabled = true;
+                hideChart();
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function formatCell(key, value) {
+            if (value === null || value === undefined) return "";
+            if (/price|amount|total/i.test(key) && value !== "" && !Number.isNaN(Number(value))) {
+                return "$" + Number(value).toFixed(2);
+            }
+            return String(value);
+        }
+
+        function renderTable(data) {
+            const container = document.getElementById("dataOutput");
+            const exportButton = document.getElementById("exportButton");
+
+            if (!data || data.length === 0) {
+                container.innerHTML = `<span class="text-slate-500">No results found in database.</span>`;
+                exportButton.disabled = true;
+                return;
+            }
+
+            exportButton.disabled = false;
+            const keys = Object.keys(data[0]);
+            let html = `<div class="overflow-x-auto w-full"><table class="w-full text-left border-collapse text-xs"><thead><tr class="bg-slate-900 text-slate-400 border-b border-slate-800">`;
+
+            keys.forEach((key) => {
+                html += `<th class="p-3 font-semibold uppercase">${escapeHtml(key)}</th>`;
+            });
+            html += `</tr></thead><tbody class="divide-y divide-slate-800/60">`;
+
+            data.forEach((row) => {
+                html += `<tr class="hover:bg-slate-900/50 transition">`;
+                keys.forEach((key) => {
+                    html += `<td class="p-3 font-mono text-slate-300">${escapeHtml(formatCell(key, row[key]))}</td>`;
+                });
+                html += `</tr>`;
+            });
+
+            html += `</tbody></table></div>`;
+            container.classList.remove("flex", "items-center", "justify-center");
+            container.innerHTML = html;
+        }
+
+        function isNumeric(value) {
+            return value !== null && value !== "" && !Number.isNaN(Number(value));
+        }
+
+        function isAggregateQuery(sql) {
+            return /\b(GROUP\s+BY|SUM\s*\(|COUNT\s*\(|AVG\s*\(|MIN\s*\(|MAX\s*\()\b/i.test(sql || "");
+        }
+
+        function hideChart() {
+            document.getElementById("chartPanel").classList.add("hidden");
+            if (resultsChart) {
+                resultsChart.destroy();
+                resultsChart = null;
+            }
+        }
+
+        function renderChart(sql, data) {
+            hideChart();
+
+            if (!isAggregateQuery(sql) || !data || data.length === 0) {
+                return;
+            }
+
+            const keys = Object.keys(data[0]);
+            const numericKeys = keys.filter((key) => data.every((row) => isNumeric(row[key])));
+            const labelKey = keys.find((key) => !numericKeys.includes(key)) || keys[0];
+            const valueKeys = numericKeys.filter((key) => key !== labelKey);
+
+            if (!valueKeys.length) {
+                return;
+            }
+
+            const labels = data.map((row) => String(row[labelKey]));
+            const usePie = valueKeys.length === 1 && data.length >= 2 && data.length <= 8;
+            const chartType = usePie ? "pie" : "bar";
+
+            const datasets = valueKeys.map((key, index) => ({
+                label: key,
+                data: data.map((row) => Number(row[key])),
+                backgroundColor: usePie
+                    ? CHART_COLORS.slice(0, data.length)
+                    : CHART_COLORS[index % CHART_COLORS.length] + "cc",
+                borderColor: usePie ? "#020617" : CHART_COLORS[index % CHART_COLORS.length],
+                borderWidth: 1,
+                borderRadius: usePie ? 0 : 8
+            }));
+
+            document.getElementById("chartPanel").classList.remove("hidden");
+
+            resultsChart = new Chart(document.getElementById("resultsChart"), {
+                type: chartType,
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: "#cbd5e1" }
+                        }
+                    },
+                    scales: usePie ? {} : {
+                        x: {
+                            ticks: { color: "#94a3b8" },
+                            grid: { color: "rgba(148, 163, 184, 0.12)" }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: "#94a3b8" },
+                            grid: { color: "rgba(148, 163, 184, 0.12)" }
+                        }
+                    }
+                }
+            });
+        }
+
+        function csvEscape(value) {
+            const text = value === null || value === undefined ? "" : String(value);
+            if (/[",\n]/.test(text)) {
+                return `"${text.replace(/"/g, '""')}"`;
+            }
+            return text;
+        }
+
+        function exportCsv() {
+            if (!lastResultData.length) return;
+
+            const keys = Object.keys(lastResultData[0]);
+            const lines = [
+                keys.map(csvEscape).join(","),
+                ...lastResultData.map((row) => keys.map((key) => csvEscape(row[key])).join(","))
+            ];
+
+            const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "query-results.csv";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById("promptInput").addEventListener("keydown", (event) => {
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                sendQuery();
+            }
+        });
+
+        renderHistory();
+    </script>
+</body>
+</html>
