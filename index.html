@@ -3,427 +3,3497 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Natural Language to SQL AI Assistant</title>
+    <title>TIIX SQL Studio — Natural Language to SQL</title>
+    <meta name="description" content="TIIX SQL Studio: turn plain English into safe SQLite queries, inspect SQL, explore results and auto-visualizations.">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #04070e;
+            --bg-2: #070c17;
+            --panel: rgba(12, 18, 32, .78);
+            --panel-strong: #0a111f;
+            --panel-soft: rgba(18, 26, 43, .66);
+            --inset: rgba(2, 6, 18, .55);
+            --border: rgba(148, 163, 184, .14);
+            --border-strong: rgba(148, 163, 184, .22);
+            --border-hover: rgba(129, 140, 248, .42);
+            --text: #f1f5f9;
+            --text-soft: #cbd5e1;
+            --muted: #94a3b8;
+            --muted-2: #64748b;
+            --accent: #818cf8;
+            --accent-2: #22d3ee;
+            --accent-ink: #c7d2fe;
+            --success: #34d399;
+            --danger: #fb7185;
+            --warning: #fbbf24;
+            --ring: rgba(99, 102, 241, .35);
+            --shadow: 0 24px 70px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .04);
+            --shadow-sm: 0 10px 30px rgba(0, 0, 0, .28);
+            --radius: 20px;
+        }
+
+        body.light {
+            color-scheme: light;
+            --bg: #eef2ff;
+            --bg-2: #e6ebf7;
+            --panel: rgba(255, 255, 255, .86);
+            --panel-strong: #ffffff;
+            --panel-soft: rgba(248, 250, 252, .92);
+            --inset: rgba(255, 255, 255, .9);
+            --border: rgba(15, 23, 42, .10);
+            --border-strong: rgba(15, 23, 42, .16);
+            --border-hover: rgba(79, 70, 229, .35);
+            --text: #0b1220;
+            --text-soft: #334155;
+            --muted: #64748b;
+            --muted-2: #94a3b8;
+            --accent: #4f46e5;
+            --accent-2: #0891b2;
+            --accent-ink: #4338ca;
+            --success: #059669;
+            --danger: #e11d48;
+            --ring: rgba(79, 70, 229, .22);
+            --shadow: 0 24px 60px rgba(15, 23, 42, .12), inset 0 1px 0 rgba(255, 255, 255, .8);
+            --shadow-sm: 0 10px 28px rgba(15, 23, 42, .10);
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 12% 6%, rgba(99,102,241,.16), transparent 30%),
+                radial-gradient(circle at 88% 10%, rgba(34,211,238,.10), transparent 26%),
+                radial-gradient(circle at 50% 108%, rgba(139,92,246,.10), transparent 34%),
+                var(--bg);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: .05;
+            background-image:
+                linear-gradient(rgba(255,255,255,.7) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.7) 1px, transparent 1px);
+            background-size: 44px 44px;
+            mask-image: linear-gradient(to bottom, black, transparent 80%);
+        }
+        body.light::before { opacity: .06; }
+
+        button, textarea, input { font: inherit; }
+        button { -webkit-tap-highlight-color: transparent; }
+        :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 8px; }
+        ::selection { background: rgba(99,102,241,.35); color: white; }
+
+        .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+        .app-shell { width: min(1460px, calc(100% - 28px)); margin: auto; padding: 18px 0 36px; }
+
+        .glass {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+        }
+
+        /* ---------- Topbar ---------- */
+        .topbar {
+            min-height: 70px;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 14px; padding: 12px 14px; border-radius: 18px;
+            position: sticky; top: 10px; z-index: 50;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .brand-mark {
+            width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; color: white; flex-shrink: 0;
+            background: linear-gradient(135deg, #6366f1, #22d3ee);
+            box-shadow: 0 0 28px rgba(99,102,241,.35), inset 0 1px 0 rgba(255,255,255,.25);
+        }
+        .brand-name { font-size: 15px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+        .studio-badge {
+            font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+            color: var(--accent-ink); background: rgba(99,102,241,.10);
+            border: 1px solid rgba(129,140,248,.25); padding: 3px 7px; border-radius: 999px;
+        }
+        .brand-subtitle { margin-top: 2px; color: var(--muted); font-size: 11px; }
+        .top-actions { display: flex; align-items: center; gap: 8px; }
+        .palette-trigger {
+            display: flex; align-items: center; gap: 8px;
+            color: var(--muted); background: var(--inset);
+            border: 1px solid var(--border); border-radius: 11px;
+            padding: 8px 10px; cursor: pointer; font-size: 11px; min-width: 190px;
+        }
+        .palette-trigger:hover { border-color: var(--border-hover); color: var(--text); }
+        .engine-pill {
+            display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 999px;
+            color: #6ee7b7; background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.18);
+            font-family: "JetBrains Mono", monospace; font-size: 10px; white-space: nowrap;
+        }
+        body.light .engine-pill { color: #047857; }
+        .engine-dot { width: 7px; height: 7px; border-radius: 999px; background: #34d399; box-shadow: 0 0 12px rgba(52,211,153,.9); animation: pulse 2s infinite; }
+        @keyframes pulse { 50% { opacity: .4; transform: scale(.75); } }
+        .icon-btn {
+            width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px;
+            border: 1px solid var(--border); background: var(--inset); color: var(--muted);
+            cursor: pointer; transition: .18s ease;
+        }
+        .icon-btn:hover { color: var(--text); border-color: var(--border-hover); transform: translateY(-1px); }
+        .avatar {
+            width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center;
+            font-size: 12px; font-weight: 800; color: white;
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            border: 1px solid rgba(255,255,255,.18);
+        }
+
+        /* ---------- Workspace ---------- */
+        .workspace { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+        .sidebar { padding: 16px; border-radius: var(--radius); position: sticky; top: 94px; max-height: calc(100vh - 110px); overflow-y: auto; }
+        .main { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+
+        .section-label { color: var(--muted-2); font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+        .sidebar-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .mini-badge { padding: 4px 8px; border-radius: 7px; color: var(--accent-ink); background: rgba(99,102,241,.09); border: 1px solid rgba(99,102,241,.18); font-family: "JetBrains Mono", monospace; font-size: 9px; }
+
+        .db-card { padding: 13px; border-radius: 15px; background: var(--panel-soft); border: 1px solid var(--border); margin-bottom: 16px; }
+        .db-title { display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 700; }
+        .db-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; color: var(--accent-ink); background: rgba(99,102,241,.10); border: 1px solid rgba(99,102,241,.18); flex-shrink: 0; }
+        .db-meta { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9.5px; margin-top: 8px; line-height: 1.7; }
+
+        .schema-tree { display: flex; flex-direction: column; gap: 5px; }
+        .table-item {
+            width: 100%; display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 11px; border-radius: 11px; color: var(--muted);
+            background: transparent; border: 1px solid transparent; cursor: pointer; transition: .16s ease;
+            font-size: 12px; font-weight: 600;
+        }
+        .table-item:hover, .table-item.active { color: var(--text); background: rgba(99,102,241,.09); border-color: rgba(99,102,241,.16); }
+        .table-left { display: flex; align-items: center; gap: 9px; }
+        .table-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 9px rgba(129,140,248,.7); flex-shrink: 0; }
+        .table-count { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; }
+        .schema-details { max-height: 0; overflow: hidden; transition: max-height .25s ease; }
+        .schema-details.open { max-height: 260px; }
+        .columns { margin: 2px 0 8px 26px; padding: 8px 10px; border-left: 1px solid rgba(129,140,248,.22); color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 10px; line-height: 2; }
+        .column-key { color: var(--accent); font-weight: 600; }
+
+        .history-tools { display: flex; gap: 6px; margin-bottom: 8px; }
+        #historySearch {
+            width: 100%; border-radius: 10px; border: 1px solid var(--border); background: var(--inset);
+            color: var(--text); outline: none; padding: 9px 10px; font-size: 11px;
+        }
+        #historySearch:focus { border-color: var(--border-hover); box-shadow: 0 0 0 3px var(--ring); }
+        #historyList { max-height: 250px; overflow-y: auto; }
+        .history-empty { padding: 12px 4px; color: var(--muted-2); font-size: 11px; line-height: 1.65; }
+        .history-item { padding: 10px 11px; margin-bottom: 6px; border-radius: 12px; background: var(--panel-soft); border: 1px solid var(--border); transition: .16s ease; }
+        .history-item:hover { border-color: rgba(129,140,248,.28); }
+        .history-number { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+        .history-prompt { margin-top: 4px; color: var(--text-soft); font-size: 11px; line-height: 1.55; }
+        .history-actions { display: flex; justify-content: flex-end; margin-top: 7px; }
+        .history-use { border: 1px solid rgba(99,102,241,.18); padding: 5px 8px; border-radius: 7px; color: var(--accent-ink); background: rgba(99,102,241,.09); cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 9px; }
+        .history-use:hover { background: rgba(99,102,241,.16); color: var(--text); }
+        .clear-btn {
+            width: 100%; margin-top: 7px; padding: 9px; border-radius: 10px; color: var(--muted);
+            background: var(--inset); border: 1px solid var(--border); cursor: pointer; font-size: 10px; font-weight: 600; transition: .16s ease;
+        }
+        .clear-btn:hover { color: var(--danger); border-color: rgba(251,113,133,.3); background: rgba(244,63,94,.07); }
+
+        /* ---------- Hero ---------- */
+        .hero { position: relative; overflow: hidden; padding: 26px 26px 22px; border-radius: 22px; }
+        .hero::before { content: ""; position: absolute; width: 340px; height: 340px; right: -140px; top: -170px; background: radial-gradient(circle, rgba(99,102,241,.24), transparent 68%); pointer-events: none; }
+        .hero::after { content: ""; position: absolute; width: 200px; height: 200px; left: -100px; bottom: -130px; background: radial-gradient(circle, rgba(34,211,238,.13), transparent 68%); pointer-events: none; }
+        .hero-top { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+        .eyebrow { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 10px; color: var(--accent-ink); background: rgba(99,102,241,.09); border: 1px solid rgba(129,140,248,.22); font-size: 9.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; }
+        .eyebrow i { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+        .hero h1 { margin: 0; font-size: clamp(28px, 4vw, 44px); line-height: 1.03; letter-spacing: -.04em; font-weight: 800; }
+        .gradient-text { background: linear-gradient(100deg, var(--text), var(--accent) 52%, var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .hero-description { max-width: 660px; margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+        .hero-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; position: relative; z-index: 2; }
+        .stat-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; background: var(--panel-soft); border: 1px solid var(--border); font-size: 11px; color: var(--text-soft); }
+        .stat-chip b { color: var(--text); }
+        .stat-chip .mono { font-size: 10px; color: var(--muted); }
+        .mode-badge { flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 999px; color: var(--accent-ink); background: rgba(99,102,241,.09); border: 1px solid rgba(129,140,248,.24); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+        .mode-badge span { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 2s infinite; }
+
+        /* ---------- Cards ---------- */
+        .query-card, .panel { padding: 20px; border-radius: var(--radius); }
+        .query-header, .panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+        .query-title, .panel-heading { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+        .query-subtitle, .panel-sub { margin-top: 4px; color: var(--muted-2); font-size: 11px; }
+        .shortcut { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 10px; background: var(--inset); border: 1px solid var(--border); padding: 4px 8px; border-radius: 7px; white-space: nowrap; }
+
+        .input-wrap { position: relative; }
+        #promptInput {
+            width: 100%; min-height: 128px; resize: vertical; outline: none; padding: 16px 16px 44px;
+            border-radius: 15px; color: var(--text); font-size: 13.5px; line-height: 1.65; transition: .18s ease;
+            background: radial-gradient(circle at 90% 8%, rgba(99,102,241,.10), transparent 40%), var(--inset);
+            border: 1px solid var(--border);
+        }
+        #promptInput::placeholder { color: var(--muted-2); }
+        #promptInput:focus { border-color: var(--border-hover); box-shadow: 0 0 0 3px var(--ring), 0 0 34px rgba(99,102,241,.10); }
+        .input-footer { position: absolute; bottom: 11px; left: 14px; right: 14px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+        .input-hint { color: var(--muted-2); font-size: 10px; }
+        .ai-indicator { display: flex; align-items: center; gap: 6px; color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .08em; }
+        .ai-indicator-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+        .suggestions-title { margin-top: 13px; margin-bottom: 8px; color: var(--muted-2); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+        .suggestions { display: flex; flex-wrap: wrap; gap: 7px; }
+        .suggestion { padding: 8px 12px; border-radius: 999px; color: var(--accent-ink); background: var(--inset); border: 1px solid var(--border); cursor: pointer; font-size: 11px; font-weight: 600; transition: .16s ease; }
+        .suggestion:hover { color: var(--text); background: rgba(99,102,241,.12); border-color: rgba(129,140,248,.4); transform: translateY(-1px); }
+
+        .run-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+        .run-hint { color: var(--muted-2); font-size: 10px; }
+        #runButton {
+            min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 20px;
+            border: 0; border-radius: 13px; color: white; font-size: 12px; font-weight: 800; cursor: pointer; transition: .18s ease;
+            background: linear-gradient(100deg, #6366f1, #4f46e5 52%, #0891b2);
+            box-shadow: 0 12px 30px rgba(79,70,229,.28), inset 0 1px 0 rgba(255,255,255,.18);
+        }
+        #runButton:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 16px 36px rgba(79,70,229,.34); filter: brightness(1.05); }
+        #runButton:disabled { opacity: .6; cursor: wait; }
+
+        .panel-title { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+        .panel-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 9px rgba(129,140,248,.8); }
+        .status { padding: 6px 9px; border-radius: 8px; color: #6ee7b7; background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.16); font-family: "JetBrains Mono", monospace; font-size: 10px; white-space: nowrap; }
+        body.light .status { color: #047857; }
+
+        #explanationBox { padding: 13px 14px; margin-bottom: 11px; border-radius: 13px; color: var(--accent-ink); background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.18); font-size: 12px; line-height: 1.65; }
+        .code-window { overflow: hidden; border-radius: 15px; background: #020617; border: 1px solid rgba(148,163,184,.14); }
+        .window-bar { height: 38px; display: flex; align-items: center; justify-content: space-between; padding: 0 11px; background: rgba(15,23,42,.75); border-bottom: 1px solid rgba(148,163,184,.10); }
+        .window-left { display: flex; align-items: center; gap: 10px; }
+        .window-dots { display: flex; gap: 5px; }
+        .window-dots span { width: 7px; height: 7px; border-radius: 999px; background: #334155; }
+        .window-dots span:first-child { background: #fb7185; }
+        .window-dots span:nth-child(2) { background: #fbbf24; }
+        .window-dots span:nth-child(3) { background: #34d399; }
+        .code-label { color: #64748b; font-family: "JetBrains Mono", monospace; font-size: 10px; }
+        .code-actions { display: flex; gap: 6px; }
+        .code-action { padding: 5px 8px; border-radius: 7px; color: #94a3b8; background: rgba(148,163,184,.07); border: 1px solid rgba(148,163,184,.12); cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 9px; }
+        .code-action:hover { color: white; border-color: rgba(129,140,248,.3); background: rgba(99,102,241,.12); }
+        .sql-editor { display: grid; grid-template-columns: 46px minmax(0, 1fr); min-height: 104px; max-height: 300px; overflow: auto; }
+        .line-numbers { padding: 15px 8px; color: #334155; text-align: right; border-right: 1px solid rgba(148,163,184,.09); font-family: "JetBrains Mono", monospace; font-size: 11px; line-height: 1.7; user-select: none; }
+        #sqlOutput { display: block; padding: 15px; color: #6ee7b7; font-family: "JetBrains Mono", monospace; font-size: 12px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+
+        .result-metrics { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+        .metric { padding: 5px 8px; border-radius: 7px; color: var(--muted-2); background: var(--inset); border: 1px solid var(--border); font-family: "JetBrains Mono", monospace; font-size: 10px; }
+        .export-btn { padding: 7px 10px; border-radius: 9px; color: #6ee7b7; background: rgba(52,211,153,.07); border: 1px solid rgba(52,211,153,.18); cursor: pointer; font-size: 10px; font-weight: 700; transition: .16s ease; }
+        body.light .export-btn { color: #047857; }
+        .export-btn:hover:not(:disabled) { background: rgba(52,211,153,.13); }
+        .export-btn:disabled { opacity: .4; cursor: not-allowed; }
+        .export-btn.secondary { color: var(--accent-ink); background: rgba(99,102,241,.09); border-color: rgba(99,102,241,.22); }
+        .export-btn.secondary:hover:not(:disabled) { background: rgba(99,102,241,.16); }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+        .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+        .results-window { overflow: hidden; border-radius: 15px; background: var(--inset); border: 1px solid var(--border); }
+        #dataOutput { min-height: 150px; max-height: 460px; overflow: auto; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; }
+        .empty-state { text-align: center; padding: 34px 20px; color: var(--muted-2); }
+        .empty-state-icon { width: 44px; height: 44px; margin: 0 auto 10px; display: grid; place-items: center; border-radius: 13px; background: rgba(99,102,241,.09); border: 1px solid rgba(99,102,241,.18); color: var(--accent-ink); }
+        #dataOutput table { width: 100%; min-width: 620px; border-collapse: collapse; }
+        #dataOutput thead { position: sticky; top: 0; z-index: 2; }
+        #dataOutput th { padding: 11px 13px; color: var(--muted); background: var(--panel-strong); border-bottom: 1px solid var(--border-strong); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; text-align: left; }
+        #dataOutput td { padding: 10px 13px; color: var(--text-soft); border-bottom: 1px solid var(--border); font-family: "JetBrains Mono", monospace; font-size: 11px; white-space: nowrap; }
+        #dataOutput tbody tr:hover td { background: rgba(99,102,241,.06); }
+        .chart-panel { margin-top: 12px; padding: 15px; border-radius: 15px; background: var(--panel-soft); border: 1px solid var(--border); }
+
+        /* ---------- Palette / toast / footer ---------- */
+        .palette-backdrop { position: fixed; inset: 0; display: none; align-items: flex-start; justify-content: center; padding: 12vh 16px 20px; background: rgba(2,6,23,.66); backdrop-filter: blur(8px); z-index: 100; }
+        .palette-backdrop.open { display: flex; }
+        .command-palette { width: min(580px, 100%); overflow: hidden; border-radius: 18px; background: var(--panel-strong); border: 1px solid var(--border-hover); box-shadow: 0 35px 100px rgba(0,0,0,.45); }
+        .palette-search { width: 100%; padding: 15px 16px; border: 0; border-bottom: 1px solid var(--border); outline: none; color: var(--text); background: transparent; font-size: 13px; }
+        .palette-list { padding: 8px; max-height: 360px; overflow-y: auto; }
+        .command-item { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 11px 12px; border-radius: 11px; border: 1px solid transparent; color: var(--text-soft); background: transparent; cursor: pointer; text-align: left; font-size: 12px; }
+        .command-item:hover, .command-item.selected { background: rgba(99,102,241,.10); border-color: rgba(99,102,241,.16); }
+        .command-key { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; }
+        .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; padding: 10px 14px; border-radius: 11px; color: white; background: rgba(10,17,31,.94); border: 1px solid rgba(129,140,248,.3); box-shadow: var(--shadow-sm); font-family: "JetBrains Mono", monospace; font-size: 11px; pointer-events: none; transition: .25s ease; z-index: 150; }
+        .toast.show { opacity: 1; transform: translate(-50%, 0); }
+        .footer-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 4px; color: var(--muted-2); font-size: 10px; }
+        .footer-brand { color: var(--muted); font-weight: 800; letter-spacing: .08em; }
+        .keyboard-key { display: inline-flex; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--inset); font-family: "JetBrains Mono", monospace; font-size: 9px; }
+
+        .fade-in { animation: fadeIn .45s ease both; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .thinking { animation: thinking 1.2s ease infinite; }
+        @keyframes thinking { 50% { opacity: .45; } }
+
+        .sidebar::-webkit-scrollbar, #historyList::-webkit-scrollbar, .sql-editor::-webkit-scrollbar, #dataOutput::-webkit-scrollbar { width: 6px; height: 6px; }
+        .sidebar::-webkit-scrollbar-thumb, #historyList::-webkit-scrollbar-thumb, .sql-editor::-webkit-scrollbar-thumb, #dataOutput::-webkit-scrollbar-thumb { background: rgba(148,163,184,.22); border-radius: 999px; }
+
+        @media (max-width: 1050px) {
+            .workspace { grid-template-columns: 1fr; }
+            .sidebar { position: static; max-height: none; }
+            .schema-tree { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; }
+            #historyList { max-height: 160px; }
+            .palette-trigger { display: none; }
+        }
+        @media (max-width: 700px) {
+            .app-shell { width: calc(100% - 14px); padding-top: 8px; }
+            .topbar { top: 6px; border-radius: 15px; padding: 10px 11px; }
+            .brand-subtitle, .engine-pill { display: none; }
+            .hero { padding: 20px; border-radius: 18px; }
+            .hero-top { display: block; }
+            .mode-badge { margin-top: 13px; }
+            .query-card, .panel, .sidebar { border-radius: 18px; }
+            .shortcut, .run-hint, .code-actions { display: none; }
+            .run-row { display: block; }
+            #runButton { width: 100%; }
+            .schema-tree { grid-template-columns: 1fr; }
+            .footer-bar { flex-direction: column; align-items: flex-start; }
+        }
+        @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+
+        /* ---------- Workspace panels (sessions / upload / approvals) ---------- */
+        .workspace-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 18px 0 4px; padding: 12px 16px; border-radius: 15px; background: var(--panel-soft); border: 1px solid var(--border); }
+        .ws-session { display: flex; align-items: center; gap: 8px; font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--muted); }
+        .ws-dot { width: 8px; height: 8px; border-radius: 999px; background: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,.15); }
+        .ws-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .workspace-palette { width: min(700px, 100%); max-height: min(640px, 90vh); overflow-y: auto; border-radius: 18px; background: var(--panel-strong); border: 1px solid var(--border-hover); box-shadow: 0 35px 100px rgba(0,0,0,.45); padding: 18px; }
+        .workspace-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+        .workspace-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+        .ws-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px; border-radius: 11px; border: 1px solid var(--border); background: var(--inset); color: var(--text-soft); font-size: 12px; }
+        .ws-row + .ws-row { margin-top: 6px; }
+        .ws-row.active { border-color: rgba(99,102,241,.35); background: rgba(99,102,241,.08); }
+        .ws-row-main { min-width: 0; }
+        .ws-row-title { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ws-row-sub { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; margin-top: 3px; }
+        .ws-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .ws-upload-zone { border: 1.5px dashed var(--border-strong); border-radius: 14px; padding: 14px; background: var(--inset); }
+        .ws-file-input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 11px; background: var(--inset); color: var(--text-soft); font-size: 12px; }
+        .ws-hint { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9.5px; margin-top: 8px; line-height: 1.6; }
+        .approval-sql { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--muted); background: var(--inset); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; margin: 8px 0 10px; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; }
+        .ws-mono { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--muted); }
+        .ws-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+        .ws-tag { padding: 4px 9px; border-radius: 999px; background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.22); color: var(--accent-ink); font-size: 10px; }
+    </style>
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-4 md:p-8">
-    <div class="max-w-4xl mx-auto space-y-6">
 
-        <header class="border-b border-slate-800 pb-4">
-            <div class="flex items-center gap-3">
-                <div class="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/30">
-                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4"></path></svg>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold tracking-tight text-white">Natural Language to SQL AI Assistant</h1>
-                    <p class="text-sm text-slate-400">Conversational Text-to-SQL with charts, CSV export, and plain-English explanations.</p>
-                </div>
-            </div>
-            <div class="mt-3 flex flex-wrap items-center gap-2">
-                <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    SQLite v3.35 Engine Active
-                </div>
-                <div id="memoryBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                    Session memory: 0 turns
-                </div>
-            </div>
-        </header>
+<body>
 
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
-            <div class="flex items-center justify-between mb-3">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Database Schema</span>
-                <span class="text-xs bg-slate-800 px-2.5 py-1 rounded-md text-indigo-400 font-mono">4 Tables • Relational</span>
+<div class="app-shell">
+
+    <header class="topbar glass">
+        <div class="brand">
+            <div class="brand-mark">
+                <svg width="21" height="21" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4-3.58 4-8 4-8-1.79-8-4Zm0 0v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7m-16 5c0 2.21 3.58 4 8 4s8-1.79 8-4" />
+                </svg>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div class="bg-slate-950 rounded-xl p-3 border border-slate-800/80">
-                    <div class="flex items-center gap-2 text-indigo-400 font-semibold mb-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                        categories
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-xs font-mono">
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-amber-400">id</span> <span class="text-slate-500">INTEGER PK</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-sky-400">name</span> <span class="text-slate-500">TEXT</span></div>
-                    </div>
-                </div>
-                <div class="bg-slate-950 rounded-xl p-3 border border-slate-800/80">
-                    <div class="flex items-center gap-2 text-indigo-400 font-semibold mb-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                        brands
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-xs font-mono">
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-amber-400">id</span> <span class="text-slate-500">INTEGER PK</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-sky-400">name</span> <span class="text-slate-500">TEXT</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800 col-span-2"><span class="text-sky-400">country</span> <span class="text-slate-500">TEXT</span></div>
-                    </div>
-                </div>
-                <div class="bg-slate-950 rounded-xl p-3 border border-slate-800/80">
-                    <div class="flex items-center gap-2 text-indigo-400 font-semibold mb-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                        products
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-xs font-mono">
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-amber-400">id</span> <span class="text-slate-500">INTEGER PK</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-sky-400">name</span> <span class="text-slate-500">TEXT</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-fuchsia-500/40"><span class="text-fuchsia-400">category_id</span> <span class="text-slate-500">FK</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-fuchsia-500/40"><span class="text-fuchsia-400">brand_id</span> <span class="text-slate-500">FK</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-emerald-400">price</span> <span class="text-slate-500">REAL</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-emerald-400">stock</span> <span class="text-slate-500">INTEGER</span></div>
-                    </div>
-                    <p class="mt-2 text-[10px] text-slate-500">category_id → categories.id · brand_id → brands.id</p>
-                </div>
-                <div class="bg-slate-950 rounded-xl p-3 border border-slate-800/80">
-                    <div class="flex items-center gap-2 text-indigo-400 font-semibold mb-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                        orders
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-xs font-mono">
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-amber-400">id</span> <span class="text-slate-500">INTEGER PK</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-fuchsia-500/40"><span class="text-fuchsia-400">product_id</span> <span class="text-slate-500">FK</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-sky-400">customer_name</span> <span class="text-slate-500">TEXT</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800"><span class="text-emerald-400">quantity</span> <span class="text-slate-500">INTEGER</span></div>
-                        <div class="bg-slate-900 p-2 rounded border border-slate-800 col-span-2"><span class="text-sky-400">order_date</span> <span class="text-slate-500">TEXT</span></div>
-                    </div>
-                    <p class="mt-2 text-[10px] text-slate-500">product_id → products.id</p>
-                </div>
+            <div>
+                <div class="brand-name">TIIX SQL <span class="studio-badge">Studio</span></div>
+                <div class="brand-subtitle">Natural language database intelligence</div>
             </div>
         </div>
 
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
-            <div class="flex items-center justify-between mb-3">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Conversation Memory</span>
-                <button onclick="clearSession()" class="text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md border border-slate-700 transition">Clear session</button>
-            </div>
-            <div id="historyList" class="space-y-2 max-h-48 overflow-y-auto text-sm text-slate-500">
-                No previous questions in this session. Follow-ups like “How many of them were ordered?” will use this history.
-            </div>
-        </div>
-
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-400">Plain English Query Input</label>
-            <textarea id="promptInput" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 text-sm resize-none" placeholder="Ask a question, then follow up in context...">Show me Nike products</textarea>
-
-            <div class="space-y-2">
-                <span class="text-xs text-slate-500 font-medium">Suggestions / Prompts:</span>
-                <div class="flex flex-wrap gap-2">
-                    <button onclick="setQuery('Show me Nike products')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">Show me Nike products</button>
-                    <button onclick="setQuery('How many of them were ordered?')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">How many of them were ordered?</button>
-                    <button onclick="setQuery('Total quantity ordered per brand')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">Total quantity per brand</button>
-                    <button onclick="setQuery('Which customers ordered clothing items?')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition">Customers who ordered clothing</button>
-                </div>
-            </div>
-
-            <button id="runButton" onclick="sendQuery()" class="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center justify-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                <span id="runButtonLabel">Translate to SQL & Run</span>
+        <div class="top-actions">
+            <button class="palette-trigger" onclick="openCommandPalette()" title="Command palette — Ctrl + K">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+                <span>Search actions…</span>
+                <span class="keyboard-key">Ctrl K</span>
             </button>
+            <div class="engine-pill"><span class="engine-dot"></span>SQLite Engine Active</div>
+            <button id="themeToggle" class="icon-btn" onclick="toggleTheme()" title="Toggle theme — Ctrl + Shift + L" aria-label="Toggle theme">
+                <svg id="themeIcon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
+                </svg>
+            </button>
+            <button class="icon-btn" onclick="openCommandPalette()" title="Command palette — Ctrl + K" aria-label="Open command palette">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+            </button>
+            <div class="avatar" title="Local workspace">TX</div>
         </div>
+    </header>
 
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Generated SQLite Query</span>
-                <span id="sqlStatus" class="text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded">Ready</span>
-            </div>
-            <div id="explanationBox" class="hidden bg-indigo-500/10 border border-indigo-500/20 text-indigo-100 text-sm rounded-xl p-3.5 leading-relaxed"></div>
-            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 font-mono text-sm text-emerald-400 overflow-x-auto min-h-[50px]">
-                <code id="sqlOutput" class="whitespace-pre-wrap">-- SQL query will appear here...</code>
-            </div>
-        </div>
+    <div class="workspace">
 
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Query Execution Results</span>
-                <button id="exportButton" onclick="exportCsv()" disabled class="text-xs font-medium text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg border border-emerald-500/20 transition">
-                    Export to CSV
-                </button>
+        <aside class="sidebar glass">
+            <div class="sidebar-heading">
+                <span class="section-label">Database Explorer</span>
+                <span class="mini-badge">SQLite · Live</span>
             </div>
-            <div id="dataOutput" class="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden min-h-[120px] flex items-center justify-center text-slate-500 text-sm p-4">
-                Click "Translate to SQL & Run" to execute a query and view results.
+
+            <div class="db-card">
+                <div class="db-title">
+                    <div class="db-icon">
+                        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4-3.58 4-8 4-8-1.79-8-4Zm0 0v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7"/></svg>
+                    </div>
+                    Local Database
+                </div>
+                <div class="db-meta mono">store.db<br>live schema via /api/schema · relational</div>
             </div>
-            <div id="chartPanel" class="hidden bg-slate-950 rounded-xl border border-slate-800 p-4">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-3">Automatic Visualization</span>
-                <div class="relative h-64 md:h-80">
-                    <canvas id="resultsChart"></canvas>
+
+            <div class="sidebar-heading">
+                <span class="section-label">Tables</span>
+            </div>
+
+            <div class="schema-tree" id="schemaTree">
+                <div class="history-empty">Loading live schema...</div>
+            </div>
+
+            <div class="mt-7">
+                <div class="sidebar-heading">
+                    <span class="section-label">Query History</span>
+                    <span id="memoryBadge" class="text-[9px] text-slate-500 font-mono">0 turns</span>
+                </div>
+
+                <div class="history-tools">
+                    <label class="sr-only" for="historySearch">Search previous queries</label>
+                    <input id="historySearch" type="text" placeholder="Search previous queries..." oninput="filterHistory()">
+                </div>
+
+                <div id="historyList" class="text-xs">No previous questions in this session.</div>
+
+                <button onclick="clearSession()" class="clear-btn">Clear session</button>
+            </div>
+        </aside>
+
+        <main class="main">
+
+            <section class="hero glass fade-in">
+                <div class="hero-top">
+                    <div>
+                        <div class="eyebrow"><i></i>AI Database Workspace</div>
+                        <h1>Ask your database.<br><span class="gradient-text">Get trusted SQL.</span></h1>
+                        <p class="hero-description">Describe what you need in plain English. TIIX generates safe, read-only SQLite, explains each query, and renders results plus automatic visualizations.</p>
+                    </div>
+                    <div class="mode-badge"><span></span>TIIX AI Mode</div>
+                </div>
+                <div class="hero-stats">
+                    <span class="stat-chip"><b>Live schema</b><span class="mono">/api/schema</span></span>
+                    <span class="stat-chip"><b>Conversational</b><span class="mono">10-turn memory</span></span>
+                    <span class="stat-chip"><b>Safe by default</b><span class="mono">SELECT-only</span></span>
+                </div>
+            </section>
+
+            <div class="workspace-bar fade-in">
+                <div class="ws-session">
+                    <span class="ws-dot"></span>
+                    <span id="sessionBadge">LOCAL SESSION</span>
+                </div>
+                <div class="ws-actions">
+                    <button class="export-btn" onclick="openWorkspace('sessions')">Sessions</button>
+                    <button class="export-btn secondary" onclick="openWorkspace('upload')">Upload</button>
+                    <button class="export-btn secondary" onclick="openWorkspace('approvals')">Approvals</button>
+                    <button class="export-btn secondary" onclick="serverPdf()">PDF Report</button>
                 </div>
             </div>
+
+            <section class="query-card glass fade-in">
+                <div class="query-header">
+                    <div>
+                        <div class="query-title">Natural Language Query</div>
+                        <div class="query-subtitle">Describe the rows, filters, joins or aggregates you want.</div>
+                    </div>
+                    <div class="shortcut">CTRL + ENTER</div>
+                </div>
+
+                <div class="input-wrap">
+                    <label class="sr-only" for="promptInput">Natural language query</label>
+                    <textarea id="promptInput" rows="4" placeholder="Ask something like: Show me Nike products...">Show me Nike products</textarea>
+                    <div class="input-footer">
+                        <div class="input-hint">Plain English → SQL → Results</div>
+                        <div class="ai-indicator"><span class="ai-indicator-dot"></span>AI READY</div>
+                    </div>
+                </div>
+
+                <div class="suggestions-title">Quick queries</div>
+                <div class="suggestions">
+                    <button onclick="setQuery('Show me Nike products')" class="suggestion">Show me Nike products</button>
+                    <button onclick="setQuery('How many of them were ordered?')" class="suggestion">How many were ordered?</button>
+                    <button onclick="setQuery('Total quantity ordered per brand')" class="suggestion">Quantity per brand</button>
+                    <button onclick="setQuery('Which customers ordered clothing items?')" class="suggestion">Clothing customers</button>
+                </div>
+
+                <div class="run-row">
+                    <div class="run-hint">Follow-ups reuse context — try “them”, “same brand”, “break that down”.</div>
+                    <button id="runButton" onclick="sendQuery()">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7"/></svg>
+                        <span id="runButtonLabel">Generate SQL &amp; Run</span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="panel glass fade-in">
+                <div class="panel-header">
+                    <div>
+                        <div class="panel-title">Generated SQLite Query</div>
+                        <div class="panel-sub">Review before you trust — copy or clear anytime.</div>
+                    </div>
+                    <span id="sqlStatus" class="status">Ready</span>
+                </div>
+
+                <div id="explanationBox" class="hidden"></div>
+
+                <div class="code-window">
+                    <div class="window-bar">
+                        <div class="window-left">
+                            <div class="window-dots"><span></span><span></span><span></span></div>
+                            <div class="code-label">query.sql</div>
+                        </div>
+                        <div class="code-actions">
+                            <button class="code-action" onclick="copySql()">COPY</button>
+                            <button class="code-action" onclick="clearSql()">CLEAR</button>
+                        </div>
+                    </div>
+                    <div class="sql-editor">
+                        <div id="lineNumbers" class="line-numbers">1</div>
+                        <code id="sqlOutput">-- SQL query will appear here...</code>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel glass fade-in">
+                <div class="panel-header">
+                    <div>
+                        <div class="panel-title">Query Execution Results</div>
+                        <div class="panel-sub">Live output from the SQLite engine</div>
+                    </div>
+                    <div class="result-metrics">
+                        <span id="resultMetric" class="metric">0 rows</span>
+                        <button id="exportButton" onclick="exportCsv()" disabled class="export-btn">Export CSV</button>
+                        <button id="exportPdfButton" onclick="exportPdf()" disabled class="export-btn secondary">Export PDF</button>
+                    </div>
+                </div>
+
+                <div class="results-window">
+                    <div id="dataOutput">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">
+                                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4-3.58 4-8 4-8-1.79-8-4Zm0 0v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7"/></svg>
+                            </div>
+                            Click “Generate SQL &amp; Run” to execute a query.
+                        </div>
+                    </div>
+                </div>
+
+                <div id="chartPanel" class="chart-panel hidden">
+                    <div class="chart-head">
+                        <div class="panel-title">Automatic Visualization</div>
+                        <button id="downloadChartButton" onclick="downloadChart()" class="export-btn secondary">Download Chart</button>
+                    </div>
+                    <div class="relative h-64 md:h-80"><canvas id="resultsChart" role="img" aria-label="Automatic visualization of query results"></canvas></div>
+                </div>
+            </section>
+
+            <footer class="footer-bar">
+                <div><span class="footer-brand">TIIX SQL STUDIO</span><span class="ml-2">AI-powered database exploration</span></div>
+                <div>Command palette <span class="keyboard-key">Ctrl</span> + <span class="keyboard-key">K</span></div>
+            </footer>
+        </main>
+    </div>
+</div>
+
+<div id="paletteBackdrop" class="palette-backdrop" onclick="closePaletteOnBackdrop(event)">
+    <div class="command-palette">
+        <label class="sr-only" for="paletteSearch">Search commands</label>
+        <input id="paletteSearch" class="palette-search" placeholder="Search commands..." autocomplete="off">
+        <div id="commandList" class="palette-list">
+            <button class="command-item" onclick="focusQuery(); closeCommandPalette()"><span>Focus query input</span><span class="command-key">CTRL + ENTER</span></button>
+            <button class="command-item" onclick="sendQuery(); closeCommandPalette()"><span>Run current query</span><span class="command-key">RUN</span></button>
+            <button class="command-item" onclick="copySql(); closeCommandPalette()"><span>Copy generated SQL</span><span class="command-key">COPY</span></button>
+            <button class="command-item" onclick="clearSql(); closeCommandPalette()"><span>Clear SQL editor</span><span class="command-key">CLEAR</span></button>
+            <button class="command-item" onclick="clearSession(); closeCommandPalette()"><span>Clear session history</span><span class="command-key">RESET</span></button>
+            <button class="command-item" onclick="downloadChart(); closeCommandPalette()"><span>Download chart PNG</span><span class="command-key">CHART</span></button>
+            <button class="command-item" onclick="exportPdf(); closeCommandPalette()"><span>Export results PDF</span><span class="command-key">PDF</span></button>
+            <button class="command-item" onclick="toggleTheme(); closeCommandPalette()"><span>Toggle theme</span><span class="command-key">CTRL + SHIFT + L</span></button>
         </div>
     </div>
+</div>
 
-    <script>
-        const CHART_COLORS = ["#818cf8", "#34d399", "#f472b6", "#38bdf8", "#fbbf24", "#a78bfa", "#fb7185", "#2dd4bf"];
+<div id="toast" class="toast">Done</div>
 
-        let sessionHistory = [];
-        let lastResultData = [];
-        let lastSql = "";
-        let resultsChart = null;
+<!-- ================= SESSIONS PANEL ================= -->
+<div id="sessionsBackdrop" class="palette-backdrop" onclick="closeWorkspace(event, 'sessions')">
+    <div class="workspace-palette">
+        <div class="workspace-head">
+            <div class="panel-title">Persistent Sessions</div>
+            <button class="export-btn" onclick="newSession()">+ New session</button>
+        </div>
+        <p class="ws-hint">Each session stores every question and answer. Follow-ups reload with full context.</p>
+        <div id="sessionsList" class="palette-list"><div class="history-empty">Loading sessions...</div></div>
+    </div>
+</div>
 
-        function escapeHtml(value) {
-            return String(value)
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;");
+<!-- ================= UPLOAD PANEL ================= -->
+<div id="uploadBackdrop" class="palette-backdrop" onclick="closeWorkspace(event, 'upload')">
+    <div class="workspace-palette">
+        <div class="workspace-head">
+            <div class="panel-title">Sandboxed Import</div>
+            <button class="export-btn secondary" onclick="closeWorkspace(event, 'upload')">Close</button>
+        </div>
+        <div class="ws-upload-zone">
+            <label class="sr-only" for="uploadInput">Choose a database, SQL script or Excel file</label>
+            <input id="uploadInput" class="ws-file-input" type="file"
+                   accept=".db,.sqlite,.sqlite3,.sql,.xlsx">
+            <button class="export-btn mt-4" onclick="handleUpload()">Import file</button>
+            <p class="ws-hint">Accepted: .db / .sqlite / .sqlite3 / .sql / .xlsx<br>
+                Files are copied into an isolated sandbox. SQL scripts run only inside a
+                brand-new throwaway database — they can never touch store.db.</p>
+        </div>
+        <div id="uploadResult" class="workspace-section"></div>
+        <div class="workspace-section">
+            <div class="sidebar-heading"><span class="section-label">Stored imports</span></div>
+            <div id="importsList"><div class="history-empty">None yet.</div></div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= APPROVALS PANEL ================= -->
+<div id="approvalsBackdrop" class="palette-backdrop" onclick="closeWorkspace(event, 'approvals')">
+    <div class="workspace-palette">
+        <div class="workspace-head">
+            <div class="panel-title">Approval Required</div>
+            <button class="export-btn secondary" onclick="closeWorkspace(event, 'approvals')">Close</button>
+        </div>
+        <p class="ws-hint">Operations classified as APPROVAL are never executed silently.
+            They are logged here and wait for an explicit decision.</p>
+        <div id="approvalsList" class="workspace-section"><div class="history-empty">No pending approvals.</div></div>
+    </div>
+</div>
+
+<script>
+
+    /* =====================================================
+       GLOBAL STATE
+    ===================================================== */
+
+    const CHART_COLORS = [
+        "#818cf8",
+        "#34d399",
+        "#f472b6",
+        "#38bdf8",
+        "#fbbf24",
+        "#a78bfa",
+        "#fb7185",
+        "#2dd4bf"
+    ];
+
+    let sessionHistory = [];
+    let lastResultData = [];
+    let lastSql = "";
+    let lastPrompt = "";
+    let lastExplanation = "";
+    let lastCount = 0;
+    let lastTruncated = false;
+    let lastQueryTime = null;
+    let currentSessionId = null;
+    let resultsChart = null;
+
+    const MAX_SESSION_TURNS = 50;
+    const MAX_PDF_ROWS = 2000;
+
+
+    /* =====================================================
+       BASIC HELPERS
+    ===================================================== */
+
+    function escapeHtml(value) {
+
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+    }
+
+
+    function setQuery(text) {
+
+        const input =
+            document.getElementById("promptInput");
+
+        input.value = text;
+
+        input.focus();
+    }
+
+
+    function focusQuery() {
+
+        const input =
+            document.getElementById("promptInput");
+
+        input.focus();
+
+        input.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
+    }
+
+
+    function showToast(message) {
+
+        const toast =
+            document.getElementById("toast");
+
+        toast.textContent = message;
+
+        toast.classList.add("show");
+
+        clearTimeout(window.__toastTimer);
+
+        window.__toastTimer =
+            setTimeout(() => {
+                toast.classList.remove("show");
+            }, 1800);
+    }
+
+
+    /* =====================================================
+       THEME
+       CTRL + SHIFT + L
+    ===================================================== */
+
+    function applyTheme(theme) {
+
+        document.body.classList.toggle(
+            "light",
+            theme === "light"
+        );
+
+        localStorage.setItem(
+            "tiix-theme",
+            theme
+        );
+
+        const icon =
+            document.getElementById("themeIcon");
+
+        if (theme === "light") {
+
+            icon.innerHTML = `
+                <path
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 3v2m0 14v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M3 12h2m14 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"
+                />
+            `;
+
+        } else {
+
+            icon.innerHTML = `
+                <path
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"
+                />
+            `;
         }
 
-        function setQuery(text) {
-            document.getElementById("promptInput").value = text;
-            document.getElementById("promptInput").focus();
+        if (resultsChart) {
+            updateChartTheme();
+        }
+    }
+
+
+    function toggleTheme() {
+
+        const current =
+            document.body.classList.contains("light")
+                ? "light"
+                : "dark";
+
+        applyTheme(
+            current === "dark"
+                ? "light"
+                : "dark"
+        );
+    }
+
+
+    applyTheme(
+        localStorage.getItem("tiix-theme") || "dark"
+    );
+
+
+    /* =====================================================
+       DATABASE EXPLORER
+    ===================================================== */
+
+    function toggleTable(name, button) {
+
+        const panel =
+            document.getElementById(
+                `schema-${name}`
+            );
+
+        if (!panel) {
+            return;
         }
 
-        function updateMemoryBadge() {
-            document.getElementById("memoryBadge").textContent =
-                `Session memory: ${sessionHistory.length} turn${sessionHistory.length === 1 ? "" : "s"}`;
-        }
+        const wasOpen =
+            panel.classList.contains("open");
 
-        function renderHistory() {
-            const container = document.getElementById("historyList");
-
-            if (!sessionHistory.length) {
-                container.className = "space-y-2 max-h-48 overflow-y-auto text-sm text-slate-500";
-                container.innerHTML = "No previous questions in this session. Follow-ups like “How many of them were ordered?” will use this history.";
-                updateMemoryBadge();
-                return;
-            }
-
-            container.className = "space-y-2 max-h-48 overflow-y-auto";
-            container.innerHTML = sessionHistory.map((turn, index) => `
-                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
-                    <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Turn ${index + 1}</div>
-                    <div class="text-sm text-slate-200">${escapeHtml(turn.prompt)}</div>
-                </div>
-            `).join("");
-
-            updateMemoryBadge();
-        }
-
-        function clearSession() {
-            sessionHistory = [];
-            lastResultData = [];
-            lastSql = "";
-            renderHistory();
-            document.getElementById("sqlOutput").textContent = "-- SQL query will appear here...";
-            document.getElementById("explanationBox").classList.add("hidden");
-            document.getElementById("explanationBox").textContent = "";
-            document.getElementById("dataOutput").innerHTML = 'Click "Translate to SQL & Run" to execute a query and view results.';
-            document.getElementById("exportButton").disabled = true;
-            hideChart();
-        }
-
-        function setLoading(isLoading) {
-            const button = document.getElementById("runButton");
-            const label = document.getElementById("runButtonLabel");
-            button.disabled = isLoading;
-            label.textContent = isLoading ? "Thinking..." : "Translate to SQL & Run";
-            document.getElementById("sqlStatus").textContent = isLoading ? "Generating" : "Ready";
-        }
-
-        async function sendQuery() {
-            const prompt = document.getElementById("promptInput").value.trim();
-            if (!prompt) return;
-
-            setLoading(true);
-
-            try {
-                const response = await fetch("/api/ask", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        prompt,
-                        history: sessionHistory
-                    })
-                });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.detail || "The assistant could not complete this request.");
-                }
-
-                lastSql = result.sql || "";
-                lastResultData = result.data || [];
-
-                document.getElementById("sqlOutput").textContent = lastSql;
-                document.getElementById("sqlStatus").textContent = `${result.count || 0} rows`;
-
-                const explanationBox = document.getElementById("explanationBox");
-                if (result.explanation) {
-                    explanationBox.textContent = result.explanation;
-                    explanationBox.classList.remove("hidden");
-                } else {
-                    explanationBox.classList.add("hidden");
-                }
-
-                renderTable(lastResultData);
-                renderChart(lastSql, lastResultData);
-
-                sessionHistory.push({
-                    prompt,
-                    sql: lastSql
-                });
-                renderHistory();
-            } catch (error) {
-                document.getElementById("sqlStatus").textContent = "Error";
-                document.getElementById("dataOutput").innerHTML =
-                    `<p class="text-red-400">${escapeHtml(error.message || "Error connecting to server backend.")}</p>`;
-                document.getElementById("exportButton").disabled = true;
-                hideChart();
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        function formatCell(key, value) {
-            if (value === null || value === undefined) return "";
-            if (/price|amount|total/i.test(key) && value !== "" && !Number.isNaN(Number(value))) {
-                return "$" + Number(value).toFixed(2);
-            }
-            return String(value);
-        }
-
-        function renderTable(data) {
-            const container = document.getElementById("dataOutput");
-            const exportButton = document.getElementById("exportButton");
-
-            if (!data || data.length === 0) {
-                container.innerHTML = `<span class="text-slate-500">No results found in database.</span>`;
-                exportButton.disabled = true;
-                return;
-            }
-
-            exportButton.disabled = false;
-            const keys = Object.keys(data[0]);
-            let html = `<div class="overflow-x-auto w-full"><table class="w-full text-left border-collapse text-xs"><thead><tr class="bg-slate-900 text-slate-400 border-b border-slate-800">`;
-
-            keys.forEach((key) => {
-                html += `<th class="p-3 font-semibold uppercase">${escapeHtml(key)}</th>`;
+        document
+            .querySelectorAll(".schema-details")
+            .forEach(item => {
+                item.classList.remove("open");
             });
-            html += `</tr></thead><tbody class="divide-y divide-slate-800/60">`;
 
-            data.forEach((row) => {
-                html += `<tr class="hover:bg-slate-900/50 transition">`;
-                keys.forEach((key) => {
-                    html += `<td class="p-3 font-mono text-slate-300">${escapeHtml(formatCell(key, row[key]))}</td>`;
-                });
-                html += `</tr>`;
+        document
+            .querySelectorAll(".table-item")
+            .forEach(item => {
+                item.classList.remove("active");
             });
 
-            html += `</tbody></table></div>`;
-            container.classList.remove("flex", "items-center", "justify-center");
-            container.innerHTML = html;
+        if (!wasOpen) {
+
+            panel.classList.add("open");
+
+            button.classList.add("active");
+
         }
+    }
 
-        function isNumeric(value) {
-            return value !== null && value !== "" && !Number.isNaN(Number(value));
-        }
 
-        function isAggregateQuery(sql) {
-            return /\b(GROUP\s+BY|SUM\s*\(|COUNT\s*\(|AVG\s*\(|MIN\s*\(|MAX\s*\()\b/i.test(sql || "");
-        }
+    /* =====================================================
+       LIVE SCHEMA FROM /api/schema
+       Single source of truth: store.db via backend
+    ===================================================== */
 
-        function hideChart() {
-            document.getElementById("chartPanel").classList.add("hidden");
-            if (resultsChart) {
-                resultsChart.destroy();
-                resultsChart = null;
-            }
-        }
+    function parseLiveSchema(schemaText) {
 
-        function renderChart(sql, data) {
-            hideChart();
+        const tables = [];
 
-            if (!isAggregateQuery(sql) || !data || data.length === 0) {
+        const lines =
+            String(schemaText || "")
+                .split("\n")
+                .map(line => line.trim())
+                .filter(Boolean);
+
+        lines.forEach(line => {
+
+            const match =
+                line.match(
+                    /^TABLE\s+(\w+)\s*\((.*)\)\s*(?:FOREIGN KEYS:\s*(.*))?$/
+                );
+
+            if (!match) {
                 return;
             }
 
-            const keys = Object.keys(data[0]);
-            const numericKeys = keys.filter((key) => data.every((row) => isNumeric(row[key])));
-            const labelKey = keys.find((key) => !numericKeys.includes(key)) || keys[0];
-            const valueKeys = numericKeys.filter((key) => key !== labelKey);
+            const tableName = match[1];
+            const columnsPart = (match[2] || "").trim();
 
-            if (!valueKeys.length) {
-                return;
-            }
+            const columns = [];
 
-            const labels = data.map((row) => String(row[labelKey]));
-            const usePie = valueKeys.length === 1 && data.length >= 2 && data.length <= 8;
-            const chartType = usePie ? "pie" : "bar";
+            if (columnsPart) {
 
-            const datasets = valueKeys.map((key, index) => ({
-                label: key,
-                data: data.map((row) => Number(row[key])),
-                backgroundColor: usePie
-                    ? CHART_COLORS.slice(0, data.length)
-                    : CHART_COLORS[index % CHART_COLORS.length] + "cc",
-                borderColor: usePie ? "#020617" : CHART_COLORS[index % CHART_COLORS.length],
-                borderWidth: 1,
-                borderRadius: usePie ? 0 : 8
-            }));
+                columnsPart
+                    .split(",")
+                    .map(part => part.trim())
+                    .filter(Boolean)
+                    .forEach(part => {
 
-            document.getElementById("chartPanel").classList.remove("hidden");
+                        const spaceIndex =
+                            part.indexOf(" ");
 
-            resultsChart = new Chart(document.getElementById("resultsChart"), {
-                type: chartType,
-                data: { labels, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            labels: { color: "#cbd5e1" }
+                        if (spaceIndex === -1) {
+                            columns.push({
+                                name: part,
+                                type: ""
+                            });
+                        } else {
+                            columns.push({
+                                name: part
+                                    .slice(0, spaceIndex)
+                                    .trim(),
+                                type: part
+                                    .slice(spaceIndex + 1)
+                                    .trim()
+                            });
                         }
-                    },
-                    scales: usePie ? {} : {
-                        x: {
-                            ticks: { color: "#94a3b8" },
-                            grid: { color: "rgba(148, 163, 184, 0.12)" }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            ticks: { color: "#94a3b8" },
-                            grid: { color: "rgba(148, 163, 184, 0.12)" }
-                        }
-                    }
-                }
+
+                    });
+
+            }
+
+            tables.push({
+                name: tableName,
+                columns
             });
-        }
 
-        function csvEscape(value) {
-            const text = value === null || value === undefined ? "" : String(value);
-            if (/[",\n]/.test(text)) {
-                return `"${text.replace(/"/g, '""')}"`;
-            }
-            return text;
-        }
-
-        function exportCsv() {
-            if (!lastResultData.length) return;
-
-            const keys = Object.keys(lastResultData[0]);
-            const lines = [
-                keys.map(csvEscape).join(","),
-                ...lastResultData.map((row) => keys.map((key) => csvEscape(row[key])).join(","))
-            ];
-
-            const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "query-results.csv";
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(url);
-        }
-
-        document.getElementById("promptInput").addEventListener("keydown", (event) => {
-            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                event.preventDefault();
-                sendQuery();
-            }
         });
 
+        return tables;
+    }
+
+
+    function renderSchemaTree(tables) {
+
+        const container =
+            document.getElementById(
+                "schemaTree"
+            );
+
+        if (!container) {
+            return;
+        }
+
+        if (!tables.length) {
+
+            container.innerHTML = `
+                <div class="history-empty">
+                    No tables found in database.
+                </div>
+            `;
+
+            return;
+        }
+
+        container.innerHTML =
+            tables
+                .map(table => {
+
+                    const safeName =
+                        String(table.name).replace(/'/g, "");
+
+                    const columnsHtml =
+                        table.columns.length
+                            ? table.columns
+                                .map(column => `
+                                    <div>
+                                        <span class="column-key">${escapeHtml(column.name)}</span>
+                                        ${column.type ? `· ${escapeHtml(column.type)}` : ""}
+                                    </div>
+                                `)
+                                .join("")
+                            : `<div>No columns</div>`;
+
+                    return `
+                        <div>
+                            <button
+                                class="table-item"
+                                onclick="toggleTable('${safeName}', this)"
+                            >
+                                <span class="table-left">
+                                    <span class="table-dot"></span>
+                                    ${escapeHtml(table.name)}
+                                </span>
+
+                                <span class="table-count">
+                                    TABLE
+                                </span>
+                            </button>
+
+                            <div
+                                id="schema-${escapeHtml(table.name)}"
+                                class="schema-details"
+                            >
+                                <div class="columns">
+                                    ${columnsHtml}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                })
+                .join("");
+    }
+
+
+    async function loadLiveSchema() {
+
+        const container =
+            document.getElementById(
+                "schemaTree"
+            );
+
+        if (container) {
+
+            container.innerHTML = `
+                <div class="history-empty">
+                    Loading live schema...
+                </div>
+            `;
+
+        }
+
+        try {
+
+            const response =
+                await fetch("/api/schema");
+
+            if (!response.ok) {
+                throw new Error(
+                    `Schema request failed (${response.status})`
+                );
+            }
+
+            const result =
+                await response.json();
+
+            const tables =
+                parseLiveSchema(
+                    result.schema
+                );
+
+            renderSchemaTree(tables);
+
+        } catch (error) {
+
+            if (container) {
+
+                container.innerHTML = `
+                    <div class="history-empty">
+                        Could not load live schema.<br>
+                        ${escapeHtml(error.message || "Backend unreachable.")}
+                        <br><br>
+                        <button
+                            class="history-use"
+                            onclick="loadLiveSchema()"
+                        >
+                            ↻ RETRY
+                        </button>
+                    </div>
+                `;
+
+            }
+
+        }
+    }
+
+
+    /* =====================================================
+       MEMORY / HISTORY
+    ===================================================== */
+
+    function updateMemoryBadge() {
+
+        document.getElementById(
+            "memoryBadge"
+        ).textContent =
+            `${sessionHistory.length} turn${
+                sessionHistory.length === 1
+                    ? ""
+                    : "s"
+            }`;
+    }
+
+
+    function renderHistory() {
+
+        const container =
+            document.getElementById("historyList");
+
+        const search =
+            document.getElementById(
+                "historySearch"
+            ).value
+            .trim()
+            .toLowerCase();
+
+
+        if (!sessionHistory.length) {
+
+            container.innerHTML = `
+                <div class="history-empty">
+                    No previous questions in this session.
+                    Follow-up questions can use previous context.
+                </div>
+            `;
+
+            updateMemoryBadge();
+
+            return;
+        }
+
+
+        const filtered =
+            sessionHistory
+                .map((turn, index) => ({
+                    turn,
+                    index
+                }))
+                .filter(({ turn }) =>
+                    !search ||
+                    turn.prompt
+                        .toLowerCase()
+                        .includes(search)
+                );
+
+
+        if (!filtered.length) {
+
+            container.innerHTML = `
+                <div class="history-empty">
+                    No matching queries found.
+                </div>
+            `;
+
+            updateMemoryBadge();
+
+            return;
+        }
+
+
+        container.innerHTML =
+            filtered
+                .map(({ turn, index }) => `
+                    <div
+                        class="history-item fade-in"
+                        data-history-item="${index}"
+                    >
+
+                        <div class="history-number">
+                            Turn ${index + 1}
+                        </div>
+
+                        <div class="history-prompt">
+                            ${escapeHtml(turn.prompt)}
+                        </div>
+
+                        <div class="history-actions">
+
+                            <button
+                                class="history-use"
+                                onclick="useHistoryQuery(${index})"
+                            >
+                                ↻ USE QUERY
+                            </button>
+
+                        </div>
+
+                    </div>
+                `)
+                .join("");
+
+
+        updateMemoryBadge();
+
+
+        requestAnimationFrame(() => {
+
+            if (!search) {
+
+                container.scrollTo({
+                    top: container.scrollHeight,
+                    behavior: "smooth"
+                });
+            }
+
+        });
+    }
+
+
+    function filterHistory() {
         renderHistory();
-    </script>
+    }
+
+
+    function useHistoryQuery(index) {
+
+        if (!sessionHistory[index]) {
+            return;
+        }
+
+        setQuery(
+            sessionHistory[index].prompt
+        );
+
+        showToast("Query loaded");
+
+        focusQuery();
+    }
+
+
+    function scrollToLatestHistory() {
+
+        const container =
+            document.getElementById(
+                "historyList"
+            );
+
+        if (!container) {
+            return;
+        }
+
+        requestAnimationFrame(() => {
+
+            container.scrollTo({
+                top: container.scrollHeight,
+                behavior: "smooth"
+            });
+
+            const lastItem =
+                container.lastElementChild;
+
+            if (lastItem) {
+
+                lastItem.scrollIntoView({
+                    behavior: "smooth",
+                    block: "nearest"
+                });
+            }
+
+        });
+    }
+
+
+    function clearSession() {
+
+        sessionHistory = [];
+        lastResultData = [];
+        lastSql = "";
+        lastPrompt = "";
+        lastExplanation = "";
+        lastCount = 0;
+        lastTruncated = false;
+        lastQueryTime = null;
+
+        renderHistory();
+
+        document.getElementById(
+            "sqlOutput"
+        ).textContent =
+            "-- SQL query will appear here...";
+
+        updateLineNumbers();
+
+
+        document.getElementById(
+            "sqlStatus"
+        ).textContent =
+            "Ready";
+
+
+        document.getElementById(
+            "explanationBox"
+        ).classList.add("hidden");
+
+
+        document.getElementById(
+            "explanationBox"
+        ).textContent = "";
+
+
+        document.getElementById(
+            "dataOutput"
+        ).innerHTML =
+            `Click "Generate SQL & Run" to execute a query.`;
+
+
+        document.getElementById(
+            "dataOutput"
+        ).classList.add(
+            "items-center",
+            "justify-center"
+        );
+
+
+        document.getElementById(
+            "exportButton"
+        ).disabled = true;
+
+
+        const clearPdfButton =
+            document.getElementById(
+                "exportPdfButton"
+            );
+
+        if (clearPdfButton) {
+            clearPdfButton.disabled = true;
+        }
+
+
+        document.getElementById(
+            "resultMetric"
+        ).textContent =
+            "0 rows";
+
+
+        hideChart();
+
+        showToast("Session cleared");
+    }
+
+
+    /* =====================================================
+       SQL EDITOR
+    ===================================================== */
+
+    function updateLineNumbers() {
+
+        const sql =
+            document.getElementById(
+                "sqlOutput"
+            ).textContent || "";
+
+        const lines =
+            Math.max(
+                1,
+                sql.split("\n").length
+            );
+
+
+        document.getElementById(
+            "lineNumbers"
+        ).innerHTML =
+            Array
+                .from(
+                    { length: lines },
+                    (_, index) => index + 1
+                )
+                .join("<br>");
+    }
+
+
+    async function copySql() {
+
+        if (!lastSql) {
+
+            showToast(
+                "No SQL query available"
+            );
+
+            return;
+        }
+
+
+        try {
+
+            await navigator.clipboard.writeText(
+                lastSql
+            );
+
+            showToast("SQL copied");
+
+        } catch (error) {
+
+            const textarea =
+                document.createElement("textarea");
+
+            textarea.value = lastSql;
+
+            document.body.appendChild(
+                textarea
+            );
+
+            textarea.select();
+
+            document.execCommand("copy");
+
+            textarea.remove();
+
+            showToast("SQL copied");
+        }
+    }
+
+
+    function clearSql() {
+
+        lastSql = "";
+
+        document.getElementById(
+            "sqlOutput"
+        ).textContent =
+            "-- SQL query will appear here...";
+
+        document.getElementById(
+            "sqlStatus"
+        ).textContent =
+            "Ready";
+
+        updateLineNumbers();
+
+        showToast("SQL editor cleared");
+    }
+
+
+    /* =====================================================
+       LOADING
+    ===================================================== */
+
+    function setLoading(isLoading) {
+
+        const button =
+            document.getElementById(
+                "runButton"
+            );
+
+        const label =
+            document.getElementById(
+                "runButtonLabel"
+            );
+
+        button.disabled =
+            isLoading;
+
+
+        label.innerHTML =
+            isLoading
+                ? `<span class="thinking">
+                       AI is generating...
+                   </span>`
+                : "Generate SQL & Run";
+
+
+        document.getElementById(
+            "sqlStatus"
+        ).textContent =
+            isLoading
+                ? "Generating"
+                : "Ready";
+    }
+
+
+    /* =====================================================
+       MAIN API
+       KEEPING /api/ask UNCHANGED
+    ===================================================== */
+
+    async function sendQuery() {
+
+        const prompt =
+            document.getElementById(
+                "promptInput"
+            ).value.trim();
+
+
+        if (!prompt) {
+
+            showToast(
+                "Enter a question first"
+            );
+
+            focusQuery();
+
+            return;
+        }
+
+
+        setLoading(true);
+
+
+        try {
+
+            const response =
+                await fetch(
+                    "/api/ask",
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body:
+                            JSON.stringify({
+                                prompt,
+                                history:
+                                    sessionHistory,
+                                session_id:
+                                    currentSessionId || null
+                            })
+                    }
+                );
+
+
+            const result =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    result.detail ||
+                    "The assistant could not complete this request."
+                );
+            }
+
+
+            lastSql =
+                result.sql || "";
+
+
+            lastResultData =
+                result.data || [];
+
+
+            lastPrompt = prompt;
+            lastExplanation = result.explanation || "";
+            lastCount = result.count || 0;
+            lastTruncated = Boolean(result.truncated);
+            lastQueryTime = new Date();
+
+
+            document.getElementById(
+                "sqlOutput"
+            ).textContent =
+                lastSql;
+
+
+            updateLineNumbers();
+
+
+            const count =
+                result.count || 0;
+
+
+            document.getElementById(
+                "sqlStatus"
+            ).textContent =
+                lastTruncated
+                    ? `${count} rows (truncated)`
+                    : `${count} rows`;
+
+
+            document.getElementById(
+                "resultMetric"
+            ).textContent =
+                lastTruncated
+                    ? `${count} row${count === 1 ? "" : "s"} (truncated)`
+                    : `${count} row${count === 1 ? "" : "s"}`;
+
+
+            const explanationBox =
+                document.getElementById(
+                    "explanationBox"
+                );
+
+
+            if (result.explanation) {
+
+                explanationBox.textContent =
+                    result.explanation;
+
+                explanationBox.classList.remove(
+                    "hidden"
+                );
+
+            } else {
+
+                explanationBox.classList.add(
+                    "hidden"
+                );
+            }
+
+
+            renderTable(
+                lastResultData
+            );
+
+
+            renderChart(
+                lastSql,
+                lastResultData
+            );
+
+
+            sessionHistory.push({
+                prompt,
+                sql: lastSql
+            });
+
+            if (sessionHistory.length > MAX_SESSION_TURNS) {
+                sessionHistory =
+                    sessionHistory.slice(-MAX_SESSION_TURNS);
+            }
+
+
+            renderHistory();
+
+
+            scrollToLatestHistory();
+
+
+            requestAnimationFrame(() => {
+
+                document
+                    .getElementById(
+                        "dataOutput"
+                    )
+                    .scrollIntoView({
+                        behavior: "smooth",
+                        block: "nearest"
+                    });
+
+            });
+
+
+            showToast(
+                lastTruncated
+                    ? `${count} result${count === 1 ? "" : "s"} returned (truncated at ${count})`
+                    : `${count} result${count === 1 ? "" : "s"} returned`
+            );
+
+
+        } catch (error) {
+
+            document.getElementById(
+                "sqlStatus"
+            ).textContent =
+                "Error";
+
+
+            document.getElementById(
+                "dataOutput"
+            ).innerHTML = `
+                <p class="text-rose-400 px-4 py-8">
+                    ${escapeHtml(
+                        error.message ||
+                        "Error connecting to server backend."
+                    )}
+                </p>
+            `;
+
+
+            hideChart();
+
+
+            document.getElementById(
+                "exportButton"
+            ).disabled =
+                true;
+
+
+            const pdfButton =
+                document.getElementById(
+                    "exportPdfButton"
+                );
+
+            if (pdfButton) {
+                pdfButton.disabled = true;
+            }
+
+
+            document.getElementById(
+                "resultMetric"
+            ).textContent =
+                "Error";
+
+
+        } finally {
+
+            setLoading(false);
+        }
+    }
+
+
+    /* =====================================================
+       TABLE
+    ===================================================== */
+
+    function formatCell(key, value) {
+
+        if (
+            value === null ||
+            value === undefined
+        ) {
+            return "";
+        }
+
+
+        if (
+            /price|amount|total/i.test(key) &&
+            value !== "" &&
+            !Number.isNaN(
+                Number(value)
+            )
+        ) {
+
+            return "$" +
+                Number(value)
+                    .toFixed(2);
+        }
+
+
+        return String(value);
+    }
+
+
+    function renderTable(data) {
+
+        const container =
+            document.getElementById(
+                "dataOutput"
+            );
+
+
+        const exportButton =
+            document.getElementById(
+                "exportButton"
+            );
+
+
+        if (
+            !data ||
+            data.length === 0
+        ) {
+
+            container.classList.add(
+                "flex",
+                "items-center",
+                "justify-center"
+            );
+
+
+            container.innerHTML = `
+                <span class="text-slate-500">
+                    No results found in database.
+                </span>
+            `;
+
+
+            exportButton.disabled =
+                true;
+
+
+            return;
+        }
+
+
+        exportButton.disabled =
+            false;
+
+
+        const keys =
+            Object.keys(data[0]);
+
+
+        let html = `
+            <div class="overflow-x-auto w-full">
+                <table>
+
+                    <thead>
+                        <tr>
+        `;
+
+
+        keys.forEach(key => {
+
+            html += `
+                <th scope="col">
+                    ${escapeHtml(key)}
+                </th>
+            `;
+
+        });
+
+
+        html += `
+                        </tr>
+                    </thead>
+
+                    <tbody>
+        `;
+
+
+        data.forEach(row => {
+
+            html += `<tr>`;
+
+
+            keys.forEach(key => {
+
+                html += `
+                    <td>
+                        ${escapeHtml(
+                            formatCell(
+                                key,
+                                row[key]
+                            )
+                        )}
+                    </td>
+                `;
+
+            });
+
+
+            html += `</tr>`;
+
+        });
+
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+
+        container.classList.remove(
+            "flex",
+            "items-center",
+            "justify-center"
+        );
+
+
+        container.innerHTML =
+            html;
+    }
+
+
+    /* =====================================================
+       CHARTS
+    ===================================================== */
+
+    function isNumeric(value) {
+
+        return (
+            value !== null &&
+            value !== "" &&
+            !Number.isNaN(
+                Number(value)
+            )
+        );
+    }
+
+
+    function isAggregateQuery(sql) {
+
+        return /\b(GROUP\s+BY|SUM\s*\(|COUNT\s*\(|AVG\s*\(|MIN\s*\(|MAX\s*\()/i.test(sql || "");
+    }
+
+
+    function hideChart() {
+
+        document
+            .getElementById(
+                "chartPanel"
+            )
+            .classList.add("hidden");
+
+
+        if (resultsChart) {
+
+            resultsChart.destroy();
+
+            resultsChart = null;
+        }
+
+        updateExportStates();
+    }
+
+
+    function updateChartTheme() {
+
+        if (!resultsChart) {
+            return;
+        }
+
+
+        const light =
+            document.body.classList.contains(
+                "light"
+            );
+
+
+        const textColor =
+            light
+                ? "#475569"
+                : "#cbd5e1";
+
+
+        const tickColor =
+            light
+                ? "#64748b"
+                : "#94a3b8";
+
+
+        if (
+            resultsChart.options.plugins &&
+            resultsChart.options.plugins.legend
+        ) {
+
+            resultsChart.options
+                .plugins
+                .legend
+                .labels
+                .color =
+                textColor;
+        }
+
+
+        if (
+            resultsChart.options.scales
+        ) {
+
+            ["x", "y"].forEach(axis => {
+
+                if (
+                    resultsChart
+                        .options
+                        .scales[axis]
+                ) {
+
+                    resultsChart
+                        .options
+                        .scales[axis]
+                        .ticks
+                        .color =
+                        tickColor;
+                }
+
+            });
+        }
+
+
+        resultsChart.update(
+            "none"
+        );
+    }
+
+
+    function renderChart(sql, data) {
+
+        hideChart();
+
+
+        if (
+            !isAggregateQuery(sql) ||
+            !data ||
+            data.length === 0
+        ) {
+            return;
+        }
+
+
+        const keys =
+            Object.keys(data[0]);
+
+
+        const numericKeys =
+            keys.filter(key =>
+                data.every(row =>
+                    isNumeric(row[key])
+                )
+            );
+
+
+        const labelKey =
+            keys.find(
+                key =>
+                    !numericKeys.includes(key)
+            ) || keys[0];
+
+
+        const valueKeys =
+            numericKeys.filter(
+                key =>
+                    key !== labelKey
+            );
+
+
+        if (!valueKeys.length) {
+            return;
+        }
+
+
+        const labels =
+            data.map(
+                row =>
+                    String(
+                        row[labelKey]
+                    )
+            );
+
+
+        const usePie =
+            valueKeys.length === 1 &&
+            data.length >= 2 &&
+            data.length <= 8;
+
+
+        const chartType =
+            usePie
+                ? "pie"
+                : "bar";
+
+
+        const datasets =
+            valueKeys.map(
+                (key, index) => ({
+
+                    label: key,
+
+                    data:
+                        data.map(
+                            row =>
+                                Number(
+                                    row[key]
+                                )
+                        ),
+
+                    backgroundColor:
+                        usePie
+                            ? CHART_COLORS.slice(
+                                0,
+                                data.length
+                            )
+                            : CHART_COLORS[
+                                index %
+                                CHART_COLORS.length
+                            ] + "cc",
+
+                    borderColor:
+                        usePie
+                            ? "#020617"
+                            : CHART_COLORS[
+                                index %
+                                CHART_COLORS.length
+                            ],
+
+                    borderWidth: 1,
+
+                    borderRadius:
+                        usePie
+                            ? 0
+                            : 8
+
+                })
+            );
+
+
+        document
+            .getElementById(
+                "chartPanel"
+            )
+            .classList.remove(
+                "hidden"
+            );
+
+
+        const light =
+            document.body.classList.contains(
+                "light"
+            );
+
+
+        resultsChart =
+            new Chart(
+                document.getElementById(
+                    "resultsChart"
+                ),
+                {
+                    type: chartType,
+
+                    data: {
+                        labels,
+                        datasets
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        maintainAspectRatio:
+                            false,
+
+                        plugins: {
+
+                            legend: {
+
+                                labels: {
+
+                                    color:
+                                        light
+                                            ? "#475569"
+                                            : "#cbd5e1",
+
+                                    font: {
+                                        size: 10
+                                    }
+
+                                }
+
+                            }
+
+                        },
+
+                        scales:
+                            usePie
+                                ? {}
+                                : {
+
+                                    x: {
+
+                                        ticks: {
+                                            color:
+                                                light
+                                                    ? "#64748b"
+                                                    : "#94a3b8"
+                                        },
+
+                                        grid: {
+                                            color:
+                                                light
+                                                    ? "rgba(15,23,42,.08)"
+                                                    : "rgba(148,163,184,.10)"
+                                        }
+
+                                    },
+
+                                    y: {
+
+                                        beginAtZero:
+                                            true,
+
+                                        ticks: {
+                                            color:
+                                                light
+                                                    ? "#64748b"
+                                                    : "#94a3b8"
+                                        },
+
+                                        grid: {
+                                            color:
+                                                light
+                                                    ? "rgba(15,23,42,.08)"
+                                                    : "rgba(148,163,184,.10)"
+                                        }
+
+                                    }
+
+                                }
+
+                    }
+
+                }
+            );
+
+        updateExportStates();
+    }
+
+
+    /* =====================================================
+       EXPORT STATE
+    ===================================================== */
+
+    function chartAvailable() {
+
+        const panel =
+            document.getElementById(
+                "chartPanel"
+            );
+
+        return Boolean(
+            resultsChart &&
+            panel &&
+            !panel.classList.contains("hidden")
+        );
+    }
+
+
+    function updateExportStates() {
+
+        const hasRows =
+            lastResultData.length > 0;
+
+        const hasSql =
+            lastSql.trim().length > 0;
+
+        const csvButton =
+            document.getElementById(
+                "exportButton"
+            );
+
+        if (csvButton) {
+            csvButton.disabled = !hasRows;
+        }
+
+        const pdfButton =
+            document.getElementById(
+                "exportPdfButton"
+            );
+
+        if (pdfButton) {
+            pdfButton.disabled = !hasSql;
+        }
+
+        const chartButton =
+            document.getElementById(
+                "downloadChartButton"
+            );
+
+        if (chartButton) {
+            chartButton.disabled =
+                !chartAvailable();
+        }
+    }
+
+
+    function reportSlug(text) {
+
+        const slug =
+            String(text || "")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "")
+                .slice(0, 40);
+
+        return slug || "query";
+    }
+
+
+    function reportTimestamp(date) {
+
+        const pad =
+            value =>
+                String(value).padStart(2, "0");
+
+        return (
+            `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
+            `-${pad(date.getHours())}${pad(date.getMinutes())}`
+        );
+    }
+
+
+    /* =====================================================
+       CHART DOWNLOAD (PNG, high resolution)
+    ===================================================== */
+
+    function downloadChart() {
+
+        if (!chartAvailable()) {
+
+            showToast(
+                "No chart available to download"
+            );
+
+            return;
+        }
+
+        try {
+
+            const previousRatio =
+                resultsChart.options.devicePixelRatio;
+
+            resultsChart.options.devicePixelRatio = 3;
+            resultsChart.update("none");
+
+            const url =
+                resultsChart.toBase64Image(
+                    "image/png",
+                    1.0
+                );
+
+            resultsChart.options.devicePixelRatio =
+                previousRatio;
+            resultsChart.update("none");
+
+            const stamp =
+                reportTimestamp(
+                    lastQueryTime || new Date()
+                );
+
+            const link =
+                document.createElement("a");
+
+            link.href = url;
+
+            link.download =
+                `tiix-chart-${reportSlug(lastPrompt)}-${stamp}.png`;
+
+            document.body.appendChild(link);
+
+            link.click();
+
+            link.remove();
+
+            showToast("Chart downloaded");
+
+        } catch (error) {
+
+            showToast(
+                "Chart download failed"
+            );
+        }
+    }
+
+
+    /* =====================================================
+       PDF REPORT
+    ===================================================== */
+
+    function pdfCellText(value) {
+
+        if (value === null || value === undefined) {
+            return "NULL";
+        }
+
+        if (typeof value === "number") {
+            return Number.isInteger(value)
+                ? String(value)
+                : String(Math.round(value * 100) / 100);
+        }
+
+        return String(value);
+    }
+
+
+    function pdfColumnStyles(keys, rows) {
+
+        const styles = {};
+
+        keys.forEach((key, index) => {
+
+            const allNumeric =
+                rows.length > 0 &&
+                rows.every(
+                    row =>
+                        row[key] === null ||
+                        row[key] === undefined ||
+                        row[key] === "" ||
+                        !Number.isNaN(Number(row[key]))
+                ) &&
+                rows.some(
+                    row =>
+                        row[key] !== null &&
+                        row[key] !== undefined &&
+                        row[key] !== "" &&
+                        !Number.isNaN(Number(row[key]))
+                );
+
+            styles[index] = {
+                halign: allNumeric ? "right" : "left",
+                valign: "middle",
+                overflow: "linebreak",
+                cellWidth: "wrap"
+            };
+
+        });
+
+        return styles;
+    }
+
+
+    async function exportPdf() {
+
+        if (!lastSql.trim()) {
+
+            showToast(
+                "Run a query before exporting PDF"
+            );
+
+            return;
+        }
+
+        if (!window.jspdf) {
+
+            showToast(
+                "PDF library not loaded — check connection and retry"
+            );
+
+            return;
+        }
+
+        const pdfButton =
+            document.getElementById(
+                "exportPdfButton"
+            );
+
+        if (pdfButton) {
+            pdfButton.disabled = true;
+        }
+
+        showToast("Generating PDF...");
+
+        try {
+
+            await new Promise(
+                resolve => setTimeout(resolve, 30)
+            );
+
+            const keys =
+                lastResultData.length
+                    ? Object.keys(lastResultData[0])
+                    : [];
+
+            const landscape =
+                keys.length > 6;
+
+            const { jsPDF } = window.jspdf;
+
+            const doc = new jsPDF({
+                orientation: landscape ? "landscape" : "portrait",
+                unit: "pt",
+                format: "a4"
+            });
+
+            const pageWidth =
+                doc.internal.pageSize.getWidth();
+            const pageHeight =
+                doc.internal.pageSize.getHeight();
+            const margin = 40;
+            const contentWidth = pageWidth - margin * 2;
+
+            const generatedAt =
+                lastQueryTime || new Date();
+
+            const footer = () => {
+
+                const total =
+                    doc.getNumberOfPages();
+
+                for (let i = 1; i <= total; i++) {
+
+                    doc.setPage(i);
+
+                    doc.setFontSize(8);
+                    doc.setTextColor(148, 163, 184);
+
+                    doc.text(
+                        "TIIX SQL Studio · store.db",
+                        margin,
+                        pageHeight - 22
+                    );
+
+                    doc.text(
+                        `Page ${i} of ${total}`,
+                        pageWidth - margin,
+                        pageHeight - 22,
+                        { align: "right" }
+                    );
+                }
+            };
+
+            // Header band
+            doc.setFillColor(79, 70, 229);
+            doc.rect(0, 0, pageWidth, 86, "F");
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(16);
+            doc.text(
+                "TIIX SQL Studio — Query Execution Report",
+                margin,
+                36
+            );
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(9);
+            doc.setTextColor(224, 231, 255);
+            doc.text(
+                `Generated ${generatedAt.toLocaleString()} · ${lastCount} row${lastCount === 1 ? "" : "s"}${lastTruncated ? " (truncated)" : ""}`,
+                margin,
+                56
+            );
+            doc.text(
+                "Database: store.db · Status: " +
+                (lastCount > 0 ? "Success" : "Success — no rows"),
+                margin,
+                70
+            );
+
+            let cursorY = 112;
+
+            const sectionLabel = text => {
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(79, 70, 229);
+                doc.text(text.toUpperCase(), margin, cursorY);
+
+                cursorY += 14;
+            };
+
+            // Request
+            if (lastPrompt) {
+
+                sectionLabel("Natural language request");
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.setTextColor(51, 65, 85);
+
+                const promptLines =
+                    doc.splitTextToSize(
+                        lastPrompt,
+                        contentWidth
+                    );
+
+                doc.text(promptLines, margin, cursorY);
+
+                cursorY += promptLines.length * 13 + 12;
+            }
+
+            // SQL block
+            sectionLabel("Generated SQL");
+
+            doc.setFont("courier", "normal");
+            doc.setFontSize(8.5);
+
+            const sqlLines =
+                doc.splitTextToSize(
+                    lastSql,
+                    contentWidth - 16
+                );
+
+            const sqlBoxHeight =
+                sqlLines.length * 12 + 16;
+
+            if (cursorY + sqlBoxHeight > pageHeight - 60) {
+                doc.addPage();
+                cursorY = margin + 10;
+            }
+
+            doc.setFillColor(15, 23, 42);
+            doc.roundedRect(
+                margin,
+                cursorY - 12,
+                contentWidth,
+                sqlBoxHeight,
+                6,
+                6,
+                "F"
+            );
+
+            doc.setTextColor(110, 231, 183);
+            doc.text(
+                sqlLines,
+                margin + 8,
+                cursorY
+            );
+
+            cursorY += sqlBoxHeight + 16;
+
+            // Explanation
+            if (lastExplanation) {
+
+                if (cursorY > pageHeight - 120) {
+                    doc.addPage();
+                    cursorY = margin + 10;
+                }
+
+                sectionLabel("AI explanation");
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.setTextColor(51, 65, 85);
+
+                const explLines =
+                    doc.splitTextToSize(
+                        lastExplanation,
+                        contentWidth
+                    );
+
+                doc.text(explLines, margin, cursorY);
+
+                cursorY += explLines.length * 13 + 12;
+            }
+
+            // Results table
+            if (cursorY > pageHeight - 140) {
+                doc.addPage();
+                cursorY = margin + 10;
+            }
+
+            sectionLabel(
+                `Results (${lastCount} row${lastCount === 1 ? "" : "s"}${lastTruncated ? ", truncated" : ""})`
+            );
+
+            if (!lastResultData.length) {
+
+                doc.setFont("helvetica", "italic");
+                doc.setFontSize(10);
+                doc.setTextColor(100, 116, 139);
+                doc.text(
+                    "No rows returned for this query.",
+                    margin,
+                    cursorY
+                );
+
+                cursorY += 20;
+
+            } else {
+
+                const pdfRows =
+                    lastResultData.slice(0, MAX_PDF_ROWS);
+
+                const head =
+                    [keys.map(key => String(key))];
+
+                const body =
+                    pdfRows.map(row =>
+                        keys.map(
+                            key =>
+                                pdfCellText(row[key])
+                        )
+                    );
+
+                doc.autoTable({
+                    startY: cursorY,
+                    head,
+                    body,
+                    theme: "grid",
+                    styles: {
+                        font: "helvetica",
+                        fontSize: 8,
+                        cellPadding: 5,
+                        textColor: [51, 65, 85],
+                        lineColor: [226, 232, 240],
+                        lineWidth: 0.5,
+                        overflow: "linebreak"
+                    },
+                    headStyles: {
+                        fillColor: [79, 70, 229],
+                        textColor: [255, 255, 255],
+                        fontStyle: "bold",
+                        fontSize: 8.5,
+                        halign: "left"
+                    },
+                    alternateRowStyles: {
+                        fillColor: [248, 250, 252]
+                    },
+                    columnStyles:
+                        pdfColumnStyles(keys, pdfRows),
+                    rowPageBreak: "avoid",
+                    showHead: "everyPage",
+                    margin: { left: margin, right: margin },
+                    didParseCell: data => {
+
+                        if (
+                            data.section === "body" &&
+                            data.cell.raw === "NULL"
+                        ) {
+                            data.cell.styles.textColor =
+                                [148, 163, 184];
+                            data.cell.styles.fontStyle =
+                                "italic";
+                        }
+                    }
+                });
+
+                cursorY =
+                    doc.lastAutoTable.finalY + 18;
+
+                if (lastResultData.length > MAX_PDF_ROWS) {
+
+                    doc.setFont("helvetica", "italic");
+                    doc.setFontSize(9);
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(
+                        `Table shows first ${MAX_PDF_ROWS} rows of ${lastResultData.length}.`,
+                        margin,
+                        cursorY
+                    );
+
+                    cursorY += 16;
+                }
+            }
+
+            // Chart
+            if (chartAvailable()) {
+
+                try {
+
+                    const chartUrl =
+                        resultsChart.toBase64Image(
+                            "image/png",
+                            1.0
+                        );
+
+                    const chartWidth = contentWidth;
+                    const chartHeight = chartWidth * 0.5;
+
+                    if (cursorY + chartHeight + 30 > pageHeight - 50) {
+                        doc.addPage();
+                        cursorY = margin + 10;
+                    }
+
+                    sectionLabel("Visualization");
+
+                    doc.addImage(
+                        chartUrl,
+                        "PNG",
+                        margin,
+                        cursorY,
+                        chartWidth,
+                        chartHeight
+                    );
+
+                    cursorY += chartHeight + 10;
+
+                } catch (chartError) {
+
+                    doc.setFont("helvetica", "italic");
+                    doc.setFontSize(9);
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(
+                        "Chart could not be embedded in this report.",
+                        margin,
+                        cursorY
+                    );
+
+                    cursorY += 16;
+                }
+            }
+
+            footer();
+
+            const stamp =
+                reportTimestamp(generatedAt);
+
+            doc.save(
+                `tiix-report-${reportSlug(lastPrompt)}-${stamp}.pdf`
+            );
+
+            showToast("PDF exported");
+
+        } catch (error) {
+
+            showToast(
+                "PDF export failed — " +
+                (error && error.message
+                    ? error.message
+                    : "unexpected error")
+            );
+
+        } finally {
+
+            updateExportStates();
+        }
+    }
+
+    /* =====================================================
+       CSV
+    ===================================================== */
+
+    function csvEscape(value) {
+
+        const text =
+            value === null ||
+            value === undefined
+                ? ""
+                : String(value);
+
+
+        if (
+            /[",\n]/.test(text)
+        ) {
+
+            return `"${text.replace(
+                /"/g,
+                '""'
+            )}"`;
+        }
+
+
+        return text;
+    }
+
+
+    function exportCsv() {
+
+        if (!lastResultData.length) {
+            return;
+        }
+
+
+        const keys =
+            Object.keys(
+                lastResultData[0]
+            );
+
+
+        const lines = [
+
+            keys
+                .map(csvEscape)
+                .join(","),
+
+            ...lastResultData.map(
+                row =>
+                    keys
+                        .map(
+                            key =>
+                                csvEscape(
+                                    row[key]
+                                )
+                        )
+                        .join(",")
+            )
+
+        ];
+
+
+        const blob =
+            new Blob(
+                ["\uFEFF" + lines.join("\n")],
+                {
+                    type:
+                        "text/csv;charset=utf-8;"
+                }
+            );
+
+
+        const url =
+            URL.createObjectURL(
+                blob
+            );
+
+
+        const link =
+            document.createElement(
+                "a"
+            );
+
+
+        link.href = url;
+
+        link.download =
+            "query-results.csv";
+
+
+        document.body.appendChild(
+            link
+        );
+
+
+        link.click();
+
+
+        link.remove();
+
+
+        URL.revokeObjectURL(
+            url
+        );
+
+
+        showToast(
+            "CSV exported"
+        );
+    }
+
+
+    /* =====================================================
+       COMMAND PALETTE
+       CTRL + K
+    ===================================================== */
+
+    function openCommandPalette() {
+
+        const backdrop =
+            document.getElementById(
+                "paletteBackdrop"
+            );
+
+
+        backdrop.classList.add(
+            "open"
+        );
+
+
+        const input =
+            document.getElementById(
+                "paletteSearch"
+            );
+
+
+        input.value = "";
+
+        input.focus();
+
+        filterCommands();
+    }
+
+
+    function closeCommandPalette() {
+
+        document
+            .getElementById(
+                "paletteBackdrop"
+            )
+            .classList.remove(
+                "open"
+            );
+    }
+
+
+    function closePaletteOnBackdrop(event) {
+
+        if (
+            event.target.id ===
+            "paletteBackdrop"
+        ) {
+
+            closeCommandPalette();
+        }
+    }
+
+
+    function filterCommands() {
+
+        const query =
+            document.getElementById(
+                "paletteSearch"
+            ).value
+            .trim()
+            .toLowerCase();
+
+
+        document
+            .querySelectorAll(
+                ".command-item"
+            )
+            .forEach(item => {
+
+                item.style.display =
+                    !query ||
+                    item.textContent
+                        .toLowerCase()
+                        .includes(query)
+                        ? "flex"
+                        : "none";
+
+            });
+    }
+
+
+    /* =====================================================
+       KEYBOARD SHORTCUTS
+    ===================================================== */
+
+    document
+        .getElementById(
+            "promptInput"
+        )
+        .addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key === "Enter" &&
+                    (event.ctrlKey ||
+                     event.metaKey)
+                ) {
+
+                    event.preventDefault();
+
+                    sendQuery();
+                }
+
+            }
+        );
+
+
+    document
+        .getElementById(
+            "paletteSearch"
+        )
+        .addEventListener(
+            "input",
+            filterCommands
+        );
+
+
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            /* Ctrl + Shift + L */
+
+            if (
+                event.ctrlKey &&
+                event.shiftKey &&
+                event.key.toLowerCase() === "l"
+            ) {
+
+                event.preventDefault();
+
+                toggleTheme();
+
+                return;
+            }
+
+
+            /* Ctrl + K */
+
+            if (
+                event.ctrlKey &&
+                event.key.toLowerCase() === "k"
+            ) {
+
+                event.preventDefault();
+
+                openCommandPalette();
+
+                return;
+            }
+
+
+            /* Escape */
+
+            if (
+                event.key === "Escape"
+            ) {
+
+                closeCommandPalette();
+
+            }
+
+        }
+    );
+
+
+    /* =====================================================
+       INITIAL STATE
+    ===================================================== */
+
+    renderHistory();
+
+    updateLineNumbers();
+
+    loadLiveSchema();
+
+    /* =====================================================
+       WORKSPACE — SESSIONS / UPLOAD / APPROVALS / SERVER PDF
+    ===================================================== */
+
+    function openWorkspace(which) {
+
+        const backdrop = document.getElementById(
+            which + "Backdrop"
+        );
+
+        backdrop.classList.add("open");
+
+        if (which === "sessions") {
+            loadSessions();
+        } else if (which === "approvals") {
+            loadApprovals();
+        }
+    }
+
+
+    function closeWorkspace(event, which) {
+
+        event.stopPropagation();
+
+        document.getElementById(
+            which + "Backdrop"
+        ).classList.remove("open");
+    }
+
+
+    function setSessionBadge(label) {
+
+        document.getElementById(
+            "sessionBadge"
+        ).textContent = label;
+    }
+
+
+    async function loadSessions() {
+
+        const container =
+            document.getElementById("sessionsList");
+
+        try {
+
+            const response = await fetch("/api/sessions");
+            const body = await response.json();
+
+            if (!body.sessions || !body.sessions.length) {
+
+                container.innerHTML =
+                    '<div class="history-empty">' +
+                    "No saved sessions yet. Create one to persist context.</div>";
+
+                return;
+            }
+
+            container.innerHTML = "";
+
+            body.sessions.forEach((session) => {
+
+                const row = document.createElement("div");
+                row.className =
+                    "ws-row" +
+                    (session.id === currentSessionId ? " active" : "");
+
+                const main = document.createElement("div");
+                main.className = "ws-row-main";
+
+                const title = document.createElement("div");
+                title.className = "ws-row-title";
+                title.textContent =
+                    session.title || "Untitled session";
+
+                const sub = document.createElement("div");
+                sub.className = "ws-row-sub";
+                sub.textContent =
+                    (session.summary
+                        ? session.summary.replace("Recent questions:\n", "") + " — "
+                        : "") +
+                    session.updated_at;
+
+                main.appendChild(title);
+                main.appendChild(sub);
+
+                const actions = document.createElement("div");
+                actions.className = "ws-row-actions";
+
+                const loadButton = document.createElement("button");
+                loadButton.className = "export-btn secondary";
+                loadButton.textContent =
+                    session.id === currentSessionId
+                        ? "Active"
+                        : "Load";
+                loadButton.onclick = () =>
+                    activateSession(
+                        session.id,
+                        session.title || "Untitled session"
+                    );
+
+                const deleteButton = document.createElement("button");
+                deleteButton.className = "export-btn secondary";
+                deleteButton.textContent = "Delete";
+                deleteButton.onclick = () =>
+                    deleteSession(session.id);
+
+                actions.appendChild(loadButton);
+                actions.appendChild(deleteButton);
+
+                row.appendChild(main);
+                row.appendChild(actions);
+
+                container.appendChild(row);
+            });
+
+        } catch (error) {
+
+            container.innerHTML =
+                '<div class="history-empty">Could not load sessions.</div>';
+        }
+    }
+
+
+    async function newSession() {
+
+        try {
+
+            const response = await fetch("/api/sessions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    title: "Session " + new Date().toLocaleString()
+                })
+            });
+
+            const session = await response.json();
+
+            if (!response.ok) {
+                throw new Error(session.detail || "Could not create session.");
+            }
+
+            activateSession(session.id, session.title);
+            loadSessions();
+
+        } catch (error) {
+
+            showToast(error.message);
+        }
+    }
+
+
+    function activateSession(id, title) {
+
+        currentSessionId = id;
+
+        setSessionBadge(title.toUpperCase());
+
+        showToast("Saving to session");
+    }
+
+
+    async function deleteSession(id) {
+
+        if (!confirm("Delete this session and its history?")) {
+            return;
+        }
+
+        try {
+
+            await fetch("/api/sessions/" + id, {
+                method: "DELETE"
+            });
+
+            if (currentSessionId === id) {
+
+                currentSessionId = null;
+                setSessionBadge("LOCAL SESSION");
+            }
+
+            loadSessions();
+
+        } catch (error) {
+
+            showToast("Could not delete session.");
+        }
+    }
+
+
+    async function handleUpload() {
+
+        const input =
+            document.getElementById("uploadInput");
+
+        const file = input.files && input.files[0];
+
+        if (!file) {
+
+            showToast("Choose a file first");
+            return;
+        }
+
+        const resultBox =
+            document.getElementById("uploadResult");
+
+        resultBox.innerHTML =
+            '<div class="history-empty thinking">Importing sandbox...</div>';
+
+        const form = new FormData();
+        form.append("file", file);
+
+        try {
+
+            const response = await fetch("/api/upload", {
+                method: "POST",
+                body: form
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.detail || "Import failed.");
+            }
+
+            const tags = result.tables && result.tables.length
+                ? result.tables
+                      .slice(0, 10)
+                      .map((name) =>
+                          '<span class="ws-tag">' +
+                          escapeHtml(name) +
+                          "</span>"
+                      )
+                      .join("")
+                : "";
+
+            resultBox.innerHTML =
+                '<div class="panel-title">' +
+                escapeHtml(result.filename) +
+                "</div>" +
+                '<div class="ws-mono" style="margin-top:6px">' +
+                result.kind.toUpperCase() +
+                " · " +
+                result.table_count +
+                " tables · " +
+                result.column_count +
+                " columns</div>" +
+                '<div class="ws-tags">' +
+                tags +
+                "</div>" +
+                '<div class="approval-sql">' +
+                escapeHtml(result.schema_text) +
+                "</div>";
+
+            showToast("Imported into sandbox");
+
+        } catch (error) {
+
+            resultBox.innerHTML = "";
+
+            showToast(error.message);
+        }
+    }
+
+
+    function escapeSqlPreview(text) {
+        return String(text || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
+
+    async function loadApprovals() {
+
+        const container =
+            document.getElementById("approvalsList");
+
+        container.innerHTML =
+            '<div class="history-empty thinking">Loading...</div>';
+
+        try {
+
+            const response = await fetch("/api/approvals?status=pending");
+            const body = await response.json();
+
+            if (!body.approvals || !body.approvals.length) {
+
+                container.innerHTML =
+                    '<div class="history-empty">No pending approvals.</div>';
+
+                return;
+            }
+
+            container.innerHTML = "";
+
+            body.approvals.forEach((approval) => {
+
+                const block = document.createElement("div");
+                block.className = "ws-row";
+                block.style.alignItems = "flex-start";
+                block.style.flexDirection = "column";
+
+                const head = document.createElement("div");
+                head.className = "ws-mono";
+                head.textContent =
+                    approval.kind.toUpperCase() +
+                    " — " +
+                    approval.created_at;
+
+                const sql = document.createElement("div");
+                sql.className = "approval-sql";
+                sql.innerHTML = escapeSqlPreview(approval.sql);
+
+                const context = document.createElement("div");
+                context.className = "ws-row-sub";
+                context.textContent = approval.context;
+
+                const actions = document.createElement("div");
+                actions.className = "ws-row-actions";
+
+                const approve = document.createElement("button");
+                approve.className = "export-btn";
+                approve.textContent = "Approve";
+                approve.onclick = () =>
+                    decideApproval(approval.id, "approve");
+
+                const reject = document.createElement("button");
+                reject.className = "export-btn secondary";
+                reject.textContent = "Reject";
+                reject.onclick = () =>
+                    decideApproval(approval.id, "reject");
+
+                actions.appendChild(approve);
+                actions.appendChild(reject);
+
+                block.appendChild(head);
+                block.appendChild(sql);
+                block.appendChild(context);
+                block.appendChild(actions);
+
+                container.appendChild(block);
+            });
+
+        } catch (error) {
+
+            container.innerHTML =
+                '<div class="history-empty">Could not load approvals.</div>';
+        }
+    }
+
+
+    async function decideApproval(id, action) {
+
+        try {
+
+            const response = await fetch(
+                "/api/approvals/" + id + "/" + action,
+                { method: "POST" }
+            );
+
+            const body = await response.json();
+
+            if (!response.ok) {
+                throw new Error(body.detail || "Could not update approval.");
+            }
+
+            showToast(
+                action === "approve"
+                    ? "Approved"
+                    : "Rejected"
+            );
+
+            loadApprovals();
+
+        } catch (error) {
+
+            showToast(error.message);
+        }
+    }
+
+
+    async function serverPdf() {
+
+        if (!lastSql) {
+
+            showToast("Run a query first");
+            return;
+        }
+
+        showToast("Building report...");
+
+        try {
+
+            const response = await fetch("/api/report", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    title: "SQL Assistant Report",
+                    question: lastPrompt || "Natural language query",
+                    sql: lastSql,
+                    explanation: lastExplanation || "",
+                    data: lastResultData.slice(0, 2000),
+                    count: lastCount,
+                    truncated: lastTruncated
+                })
+            });
+
+            if (!response.ok) {
+
+                const errorBody = await response.json().catch(() => ({}));
+
+                throw new Error(
+                    errorBody.detail || "Report generation failed."
+                );
+            }
+
+            const blob = await response.blob();
+
+            const url = URL.createObjectURL(blob);
+
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = "sql_report.pdf";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+
+            URL.revokeObjectURL(url);
+
+            showToast("Report downloaded");
+
+        } catch (error) {
+
+            showToast(error.message);
+        }
+    }
+
+</script>
+
 </body>
 </html>

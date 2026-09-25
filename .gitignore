@@ -3,3 +3,16 @@ __pycache__/
 .env
 .venv/
 venv/
+
+# Runtime-generated state. store.db is intentionally NOT ignored:
+# it is the deployed read-only dataset and must stay tracked.
+app_meta.db
+app_meta.db-journal
+app_meta.db-wal
+app_meta.db-shm
+uploads/
+
+# Local tooling
+.pytest_cache/
+.vercel/
+

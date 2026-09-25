@@ -1,4 +1,9 @@
 fastapi
 pydantic
 google-genai
+openai
 uvicorn
+python-dotenv
+openpyxl
+reportlab
+pytest
