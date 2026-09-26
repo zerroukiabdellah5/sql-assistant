@@ -16,3 +16,6 @@ uploads/
 .pytest_cache/
 .vercel/
 
+
+.vercel
+.env*

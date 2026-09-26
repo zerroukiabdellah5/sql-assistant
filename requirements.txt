@@ -6,4 +6,5 @@ uvicorn
 python-dotenv
 openpyxl
 reportlab
+python-multipart
 pytest

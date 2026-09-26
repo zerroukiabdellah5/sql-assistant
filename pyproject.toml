@@ -1,2 +1,20 @@
+[project]
+name = "sql-assistant"
+version = "4.0.0"
+description = "Natural Language to SQL AI Assistant (TIIX SQL Studio)"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "pydantic",
+    "google-genai",
+    "openai",
+    "uvicorn",
+    "python-dotenv",
+    "openpyxl",
+    "reportlab",
+    "python-multipart",
+    "pytest",
+]
+
 [tool.vercel]
 entrypoint = "app.main:app"
