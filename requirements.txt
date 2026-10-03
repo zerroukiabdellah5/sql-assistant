@@ -1,10 +1,151 @@
-fastapi
-pydantic
-google-genai
-openai
-uvicorn
-python-dotenv
-openpyxl
-reportlab
-python-multipart
-pytest
+# ============================================================
+# PRODUCTION DEPENDENCIES (what the Vercel build installs)
+# ============================================================
+# Generated from uv.lock, not written by hand. Exact versions, so
+# two builds of the same commit install the same code. This file is
+# the single source of truth for the deployed environment; uv.lock
+# additionally records the sha256 of every artifact.
+#
+# Regenerate after changing [project].dependencies in
+# pyproject.toml, then re-run `uv lock` first:
+#
+#   uv lock
+#   uv export --frozen --no-hashes --no-emit-project --no-dev \
+#       --format requirements-txt > requirements.txt
+#
+# WHAT IS NOT HERE
+# pytest and its exclusive dependencies (iniconfig, packaging,
+# pluggy, pygments, colorama) are development tools and are
+# excluded by --no-dev. They live in [dependency-groups] dev in
+# pyproject.toml and are never installed into the deployment.
+#
+# WHAT IS HERE
+# The direct runtime imports declared in pyproject.toml, plus every
+# package they resolve to. uvicorn is included on purpose: it is the
+# server `python main.py` runs locally.
+#
+# NOTE ON HASHES
+# Versions are pinned but artifact hashes are not, because the
+# platform-specific wheels cannot be verified from this repository.
+# uv.lock carries the hashes if hash-level verification is wanted.
+# ============================================================
+annotated-doc==0.0.5
+    # via fastapi
+annotated-types==0.8.0
+    # via pydantic
+anyio==4.15.1
+    # via
+    #   google-genai
+    #   httpx
+    #   httpx2
+    #   openai
+    #   starlette
+certifi==2026.7.22
+    # via
+    #   httpcore
+    #   httpx
+    #   requests
+cffi==2.1.1 ; platform_python_implementation != 'PyPy'
+    # via cryptography
+charset-normalizer==3.5.1
+    # via
+    #   reportlab
+    #   requests
+click==8.5.0
+    # via uvicorn
+cryptography==50.0.1
+    # via google-auth
+distro==1.9.0
+    # via google-genai
+et-xmlfile==2.0.0
+    # via openpyxl
+fastapi==0.141.1
+    # via sql-assistant
+google-auth==2.58.1
+    # via google-genai
+google-genai==2.25.0
+    # via sql-assistant
+h11==0.16.0
+    # via
+    #   httpcore
+    #   httpcore2
+    #   uvicorn
+httpcore==1.0.9
+    # via httpx
+httpcore2==2.13.1 ; sys_platform != 'emscripten'
+    # via httpx2
+httpx==0.28.1
+    # via google-genai
+httpx2==2.13.1
+    # via openai
+httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
+    # via httpx2
+idna==3.20
+    # via
+    #   anyio
+    #   httpx
+    #   httpx2
+    #   requests
+jiter==0.17.0
+    # via openai
+openai==3.19.2
+    # via sql-assistant
+openpyxl==3.1.5
+    # via sql-assistant
+pillow==12.3.0
+    # via reportlab
+pyasn1==0.6.4
+    # via pyasn1-modules
+pyasn1-modules==0.4.2
+    # via google-auth
+pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
+    # via cffi
+pydantic==2.13.5
+    # via
+    #   fastapi
+    #   google-genai
+    #   openai
+    #   sql-assistant
+pydantic-core==2.46.5
+    # via pydantic
+python-dotenv==1.2.3
+    # via sql-assistant
+python-multipart==0.0.32
+    # via sql-assistant
+reportlab==5.0.1
+    # via sql-assistant
+requests==2.34.2
+    # via
+    #   google-auth
+    #   google-genai
+sniffio==1.3.1
+    # via
+    #   google-genai
+    #   openai
+starlette==1.7.0
+    # via fastapi
+tenacity==9.1.4
+    # via google-genai
+truststore==0.10.4 ; sys_platform != 'emscripten'
+    # via
+    #   httpcore2
+    #   httpx2
+typing-extensions==4.16.0
+    # via
+    #   anyio
+    #   fastapi
+    #   google-genai
+    #   openai
+    #   pydantic
+    #   pydantic-core
+    #   typing-inspection
+typing-inspection==0.4.4
+    # via
+    #   fastapi
+    #   pydantic
+urllib3==2.8.0
+    # via requests
+uvicorn==0.54.0
+    # via sql-assistant
+websockets==16.1.1
+    # via google-genai

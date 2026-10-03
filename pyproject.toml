@@ -3,6 +3,17 @@ name = "sql-assistant"
 version = "4.0.0"
 description = "Natural Language to SQL AI Assistant (TIIX SQL Studio)"
 requires-python = ">=3.13"
+
+# RUNTIME DEPENDENCIES
+# Everything app/ imports at runtime, and nothing else. The test
+# runner is deliberately absent: it is a development tool and must
+# not be installed into the production deployment.
+#
+# These are intentionally unpinned here so the ranges stay
+# readable. Reproducibility comes from uv.lock, which resolves this
+# list to exact versions. The pinned, test-free set that the Vercel
+# build actually installs is requirements.txt, generated from that
+# same lockfile.
 dependencies = [
     "fastapi",
     "pydantic",
@@ -13,8 +24,16 @@ dependencies = [
     "openpyxl",
     "reportlab",
     "python-multipart",
+]
+
+# Development only. Never installed by the deployment build.
+[dependency-groups]
+dev = [
     "pytest",
 ]
 
 [tool.vercel]
+# Records which ASGI object the deployment serves. The mechanism
+# Vercel actually uses is the convention file api/index.py plus
+# vercel.json; this table is documentation, not a build input.
 entrypoint = "app.main:app"
