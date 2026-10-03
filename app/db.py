@@ -1,12 +1,19 @@
 # ============================================================
 # DATABASE CONNECTION + SAFE EXECUTION
 # ============================================================
+# The read path is also where result provenance is measured.
+# execute_sql_with_metadata() reports the file it opened, when the
+# statement ran, how long it took and how many rows came back; see
+# app/provenance.py for what may be derived from those facts, and for
+# what provenance deliberately does not claim.
+# ============================================================
 
 import os
 import sqlite3
 
 from urllib.parse import quote
 
+from app import provenance
 from app.config import (
     DATABASE_PATH,
     DB_BUSY_TIMEOUT_MS,
@@ -79,45 +86,150 @@ def verify_query_plan(sql, path=None, read_only=True):
 # EXECUTE SQL (AUTO READ-ONLY PATH)
 # ============================================================
 
-def execute_sql(sql, path=None):
-    """Validate, plan-check, then execute a read-only SELECT/WITH."""
+# How many rows are pulled from SQLite per round trip. An internal
+# detail: it never changes what the caller sees, only how many
+# fetchmany calls it takes to get there.
+_FETCH_BATCH = 500
+
+
+class Execution:
+    """What happened while one validated statement was executed.
+
+    These are observations, not verdicts. Nothing here says the
+    statement was correct, only which file it ran against, when, how
+    long it took and how many rows came back.
+
+    database_path
+        The file actually opened, kept server-side so provenance can
+        derive a basename and a digest from it. It is never returned
+        to a client.
+    executed_at
+        UTC ISO-8601 time at which execution started, taken
+        immediately before the statement reached SQLite. elapsed_ms
+        covers the whole statement, so the pair brackets the real work.
+        Neither includes validation, plan checking or connection setup.
+    rows_returned
+        Rows the caller received, after MAX_ROWS was applied.
+    total_matched
+        Rows the statement produced. Set only when the fetch loop ran
+        to exhaustion and the cursor therefore had nothing left; null
+        whenever the result set was cut short. No COUNT(*) wrapper and
+        no second execution, because wrapping a statement changes what
+        LIMIT, DISTINCT, GROUP BY, aggregates, CTEs and UNION mean.
+    truncated
+        True only when MAX_ROWS dropped at least one row that existed.
+    """
+
+    __slots__ = (
+        "database_path",
+        "executed_at",
+        "elapsed_ms",
+        "rows_returned",
+        "total_matched",
+        "truncated",
+    )
+
+    def __init__(
+        self,
+        database_path=None,
+        executed_at=None,
+        elapsed_ms=None,
+        rows_returned=0,
+        total_matched=None,
+        truncated=False,
+    ):
+        self.database_path = database_path
+        self.executed_at = executed_at
+        self.elapsed_ms = elapsed_ms
+        self.rows_returned = rows_returned
+        self.total_matched = total_matched
+        self.truncated = truncated
+
+
+def execute_sql_with_metadata(sql, path=None):
+    """Validate, plan-check, then execute a read-only SELECT/WITH.
+
+    Returns (rows, Execution). The rows are unchanged from
+    execute_sql; the Execution carries how they were produced.
+    """
 
     validate_sql(sql)
     verify_query_plan(sql, path=path, read_only=True)
 
+    database = path or DATABASE_PATH
     connection = get_connection(path, read_only=True)
 
     try:
 
         cursor = connection.cursor()
+
+        # Started and stamped here, immediately around the statement,
+        # so neither value is contaminated by validation or connection
+        # setup and neither is affected by LLM generation time.
+        started = provenance.execution_clock()
+        executed_at = provenance.utc_timestamp()
+
         cursor.execute(sql)
 
         rows = []
         truncated = False
+        exhausted = False
 
         while True:
 
-            batch = cursor.fetchmany(500)
+            batch = cursor.fetchmany(_FETCH_BATCH)
 
             if not batch:
+                exhausted = True
                 break
 
             rows.extend(batch)
 
             if len(rows) >= MAX_ROWS:
 
-                truncated = True
                 rows = rows[:MAX_ROWS]
+
+                # Peek one row further. Without this a result set of
+                # exactly MAX_ROWS rows is reported as truncated
+                # although nothing was lost, and a client cannot tell
+                # the two apart.
+                truncated = bool(cursor.fetchmany(1))
+
+                # The peek answered the only question that was open: if
+                # nothing came back, the cursor had nothing left to
+                # give, so the total is known rather than unknowable.
+                exhausted = not truncated
                 break
+
+        duration = provenance.elapsed_ms(started)
 
         return (
             [
                 dict(row)
                 for row in rows
             ],
-            truncated,
+            Execution(
+                database_path=database,
+                executed_at=executed_at,
+                elapsed_ms=duration,
+                rows_returned=len(rows),
+                total_matched=len(rows) if exhausted else None,
+                truncated=truncated,
+            ),
         )
 
     finally:
 
         connection.close()
+
+
+def execute_sql(sql, path=None):
+    """Validate, plan-check, then execute a read-only SELECT/WITH.
+
+    The original two-value return, kept for callers that only need the
+    rows. New code should use execute_sql_with_metadata.
+    """
+
+    rows, execution = execute_sql_with_metadata(sql, path=path)
+
+    return rows, execution.truncated

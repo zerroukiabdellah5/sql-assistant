@@ -13,6 +13,8 @@ from datetime import datetime
 
 import app.config as config
 
+from app import correctness  # noqa: E402
+
 from reportlab.lib import colors  # noqa: E402
 from reportlab.lib.pagesizes import A4  # noqa: E402
 from reportlab.lib.styles import ParagraphStyle  # noqa: E402
@@ -233,6 +235,31 @@ def _results_table(data, cap_rows=100):
     return table
 
 
+def _source_lines(source_database, source_sha256, model):
+    """The provenance facts that can actually be printed, as lines.
+
+    Each value is used only if it still has the shape it had in the
+    /api/ask response: a basename, a 64-character hex digest, a short
+    label. A report is generated from a client request, so this is the
+    last point at which a value that was not produced here can be kept
+    out of the document. A missing fact is left out rather than filled
+    in with a guess.
+    """
+
+    lines = []
+
+    if source_database:
+        lines.append(f"Database: {source_database}")
+
+    if source_sha256:
+        lines.append(f"SHA-256: {source_sha256}")
+
+    if model:
+        lines.append(f"Written by: {model}")
+
+    return lines
+
+
 def _footer(canvas_object, document):
 
     canvas_object.saveState()
@@ -258,8 +285,18 @@ def build_report_pdf(
     schema_text="",
     generated_at=None,
     output_dir=None,
+    source_database=None,
+    source_sha256=None,
+    model=None,
 ):
-    """Generate a professional PDF report and return its path."""
+    """Generate a professional PDF report and return its path.
+
+    The three source_* / model arguments are the provenance the client
+    already received from /api/ask. They are optional and each is
+    printed only if it has the right shape, so a report generated
+    without them is still a valid report: it just says less about
+    where the rows came from.
+    """
 
     data = data or []
 
@@ -357,6 +394,44 @@ def build_report_pdf(
                 schema_style,
             )
         )
+
+    # Where the rows came from, printed before the rows themselves and
+    # never mixed with a judgement about them. A report outlives the
+    # screen it was made from, so the source facts travel with it.
+    source_lines = _source_lines(
+        source_database,
+        source_sha256,
+        model,
+    )
+
+    if source_lines:
+        flowables.append(Paragraph("Source", section_style))
+        flowables.append(
+            Paragraph(
+                "<br/>".join(_escape(line) for line in source_lines),
+                body_style,
+            )
+        )
+
+    # And the statement that none of this checked the answer. It is
+    # unconditional: a report generated with no provenance at all
+    # still says the query was written by a model and still says
+    # nothing confirmed it.
+    flowables.append(Spacer(1, 3 * mm))
+    flowables.append(
+        Paragraph(
+            _escape(correctness.CORRECTNESS_NOTE),
+            ParagraphStyle(
+                name="Unverified",
+                fontName="Helvetica-Oblique",
+                fontSize=8.5,
+                leading=11.5,
+                textColor=colors.HexColor("#64748B"),
+                backColor=colors.HexColor("#F8FAFC"),
+                borderPadding=5,
+            ),
+        )
+    )
 
     flowables.append(Paragraph("Results", section_style))
     flowables.append(

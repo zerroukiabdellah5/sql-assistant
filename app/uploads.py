@@ -19,6 +19,7 @@ from app.schema import (
     inspect_database,
     schema_to_text,
 )
+from app.validate import ValidationError
 
 _TABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _SAFE_ID_RE = re.compile(r"[^A-Za-z0-9_.-]")
@@ -50,7 +51,7 @@ def _sanitize_filename(filename):
 def _ensure_upload_size(content):
     maximum = config.MAX_UPLOAD_MB * 1024 * 1024
     if len(content) > maximum:
-        raise ValueError(
+        raise ValidationError(
             f"Upload is too large. Maximum is {config.MAX_UPLOAD_MB} MB."
         )
     return content
@@ -151,10 +152,10 @@ def import_sql_script(filename, content):
     statements = _split_statements(text)
 
     if not statements:
-        raise ValueError("The SQL script contains no statements.")
+        raise ValidationError("The SQL script contains no statements.")
 
     if len(statements) > config.MAX_SQL_SCRIPT_STATEMENTS:
-        raise ValueError(
+        raise ValidationError(
             f"SQL script has too many statements "
             f"(max {config.MAX_SQL_SCRIPT_STATEMENTS})."
         )
@@ -173,7 +174,7 @@ def import_sql_script(filename, content):
         for statement in statements:
 
             if not _STATEMENT_START_RE.match(statement):
-                raise ValueError(
+                raise ValidationError(
                     "Only CREATE TABLE/INDEX/VIEW and INSERT INTO "
                     "statements are allowed in imported SQL scripts. "
                     f"Rejected: {statement[:80]}"
@@ -184,7 +185,7 @@ def import_sql_script(filename, content):
                 word in lower
                 for word in ["attach", "detach", "vacuum", "load_extension"]
             ):
-                raise ValueError(
+                raise ValidationError(
                     "Import scripts cannot ATTACH/VACUUM or load extensions."
                 )
 
@@ -392,7 +393,7 @@ def import_excel(filename, content):
     if sheet_count == 0:
         if os.path.exists(target):
             os.remove(target)
-        raise ValueError("The Excel file contains no importable sheets.")
+        raise ValidationError("The Excel file contains no importable sheets.")
 
     inspected = inspect_upload(target)
 
@@ -425,7 +426,7 @@ def import_file(filename, content):
     if extension in config.ALLOWED_EXCEL_EXTENSIONS:
         return import_excel(filename, content)
 
-    raise ValueError(
+    raise ValidationError(
         "Unsupported file type. Use .db/.sqlite/.sqlite3, .sql, or .xlsx."
     )
 

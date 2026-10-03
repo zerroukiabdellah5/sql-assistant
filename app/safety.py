@@ -8,7 +8,7 @@
 
 import re
 
-from app.validate import validate_sql
+from app.validate import ValidationError, validate_sql
 
 AUTO = "AUTO"
 APPROVAL = "APPROVAL"
@@ -22,7 +22,7 @@ def classify_operation(sql):
     cleaned = (sql or "").strip()
 
     if not cleaned:
-        raise ValueError("SQL is empty.")
+        raise ValidationError("SQL is empty.")
 
     if _READ_ONLY_RE.match(cleaned):
         return AUTO
@@ -51,7 +51,7 @@ def ensure_auto(sql):
     validate_sql(sql)
 
     if classify_operation(sql) != AUTO:
-        raise ValueError(
+        raise ValidationError(
             "This operation is not AUTO-safe and requires approval."
         )
 

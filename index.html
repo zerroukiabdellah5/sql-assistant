@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TIIX SQL Studio — Natural Language to SQL</title>
-    <meta name="description" content="TIIX SQL Studio: turn plain English into safe SQLite queries, inspect SQL, explore results and auto-visualizations.">
+    <meta name="description" content="TIIX SQL Studio: turn plain English into read-only SQLite queries, inspect the SQL, see where every result came from, and explore results with automatic visualizations.">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -17,54 +17,67 @@
     <style>
         :root {
             color-scheme: dark;
-            --bg: #04070e;
-            --bg-2: #070c17;
-            --panel: rgba(12, 18, 32, .78);
-            --panel-strong: #0a111f;
-            --panel-soft: rgba(18, 26, 43, .66);
-            --inset: rgba(2, 6, 18, .55);
-            --border: rgba(148, 163, 184, .14);
-            --border-strong: rgba(148, 163, 184, .22);
-            --border-hover: rgba(129, 140, 248, .42);
-            --text: #f1f5f9;
-            --text-soft: #cbd5e1;
-            --muted: #94a3b8;
-            --muted-2: #64748b;
-            --accent: #818cf8;
-            --accent-2: #22d3ee;
-            --accent-ink: #c7d2fe;
-            --success: #34d399;
+            --bg: #141416;
+            --bg-2: #101116;
+            --panel: #1b1c20;
+            --panel-strong: #1f2025;
+            --panel-soft: #202126;
+            --inset: #0f1016;
+            --border: rgba(255, 255, 255, .07);
+            --border-strong: rgba(255, 255, 255, .12);
+            --border-hover: rgba(111, 177, 203, .45);
+            --text: #edeef2;
+            --text-soft: #c9cbd0;
+            --muted: #9c9ea4;
+            --muted-2: #888a90;
+            --accent: #6fb1cb;
+            --accent-2: #a6e4df;
+            --accent-3: #4ea2ae;
+            --accent-ink: #a6e4df;
+            --violet: #bda8cf;
+            --ember: #ffb95a;
+            --success: #35d6a0;
+            --success-ink: #4ade9f;
             --danger: #fb7185;
             --warning: #fbbf24;
-            --ring: rgba(99, 102, 241, .35);
-            --shadow: 0 24px 70px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .04);
-            --shadow-sm: 0 10px 30px rgba(0, 0, 0, .28);
-            --radius: 20px;
+            --ring: rgba(111, 177, 203, .40);
+            --wash: rgba(111, 177, 203, .08);
+            --wash-strong: rgba(111, 177, 203, .14);
+            --shadow: 0 8px 28px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .04);
+            --shadow-sm: 0 4px 14px rgba(0, 0, 0, .40);
+            --radius: 14px;
+            --top-band: linear-gradient(90deg, #81ccc7, #a8e6e1 22%, #4ea9ae 52%, #76afcd 78%, #6190ae);
         }
 
         body.light {
             color-scheme: light;
-            --bg: #eef2ff;
-            --bg-2: #e6ebf7;
-            --panel: rgba(255, 255, 255, .86);
+            --bg: #eef2f7;
+            --bg-2: #e6ebf2;
+            --panel: rgba(255, 255, 255, .92);
             --panel-strong: #ffffff;
-            --panel-soft: rgba(248, 250, 252, .92);
+            --panel-soft: rgba(248, 250, 252, .95);
             --inset: rgba(255, 255, 255, .9);
             --border: rgba(15, 23, 42, .10);
             --border-strong: rgba(15, 23, 42, .16);
-            --border-hover: rgba(79, 70, 229, .35);
+            --border-hover: rgba(14, 116, 144, .38);
             --text: #0b1220;
             --text-soft: #334155;
-            --muted: #64748b;
-            --muted-2: #94a3b8;
-            --accent: #4f46e5;
-            --accent-2: #0891b2;
-            --accent-ink: #4338ca;
+            --muted: #475569;
+            --muted-2: #646b78;
+            --accent: #0e7490;
+            --accent-2: #0d7d8c;
+            --accent-3: #0e7490;
+            --accent-ink: #0b5c73;
+            --violet: #7c5f92;
+            --ember: #b26a12;
             --success: #059669;
+            --success-ink: #047857;
             --danger: #e11d48;
-            --ring: rgba(79, 70, 229, .22);
-            --shadow: 0 24px 60px rgba(15, 23, 42, .12), inset 0 1px 0 rgba(255, 255, 255, .8);
-            --shadow-sm: 0 10px 28px rgba(15, 23, 42, .10);
+            --ring: rgba(14, 116, 144, .24);
+            --wash: rgba(14, 116, 144, .07);
+            --wash-strong: rgba(14, 116, 144, .13);
+            --shadow: 0 8px 28px rgba(15, 23, 42, .12), inset 0 1px 0 rgba(255, 255, 255, .8);
+            --shadow-sm: 0 4px 14px rgba(15, 23, 42, .10);
         }
 
         * { box-sizing: border-box; }
@@ -76,9 +89,10 @@
             color: var(--text);
             font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
             background:
-                radial-gradient(circle at 12% 6%, rgba(99,102,241,.16), transparent 30%),
-                radial-gradient(circle at 88% 10%, rgba(34,211,238,.10), transparent 26%),
-                radial-gradient(circle at 50% 108%, rgba(139,92,246,.10), transparent 34%),
+                radial-gradient(ellipse 58% 48% at 0% 24%, rgba(78, 162, 174, .17), transparent 70%),
+                radial-gradient(ellipse 52% 44% at 100% 32%, rgba(111, 177, 203, .14), transparent 70%),
+                radial-gradient(ellipse 66% 44% at 80% 106%, rgba(111, 177, 203, .10), transparent 72%),
+                radial-gradient(ellipse 44% 40% at 20% 102%, rgba(189, 168, 207, .07), transparent 74%),
                 var(--bg);
             overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
@@ -87,21 +101,19 @@
         body::before {
             content: "";
             position: fixed;
-            inset: 0;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--top-band);
+            opacity: .9;
             pointer-events: none;
-            opacity: .05;
-            background-image:
-                linear-gradient(rgba(255,255,255,.7) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,.7) 1px, transparent 1px);
-            background-size: 44px 44px;
-            mask-image: linear-gradient(to bottom, black, transparent 80%);
+            z-index: 200;
         }
-        body.light::before { opacity: .06; }
+        body.light::before { opacity: .75; }
 
         button, textarea, input { font: inherit; }
         button { -webkit-tap-highlight-color: transparent; }
         :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 8px; }
-        ::selection { background: rgba(99,102,241,.35); color: white; }
+        ::selection { background: rgba(111, 177, 203, .32); color: white; }
 
         .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
 
@@ -111,8 +123,6 @@
             background: var(--panel);
             border: 1px solid var(--border);
             box-shadow: var(--shadow);
-            backdrop-filter: blur(22px);
-            -webkit-backdrop-filter: blur(22px);
         }
 
         /* ---------- Topbar ---------- */
@@ -124,44 +134,44 @@
         }
         .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .brand-mark {
-            width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; color: white; flex-shrink: 0;
-            background: linear-gradient(135deg, #6366f1, #22d3ee);
-            box-shadow: 0 0 28px rgba(99,102,241,.35), inset 0 1px 0 rgba(255,255,255,.25);
+            width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: #06222a; flex-shrink: 0;
+            background: linear-gradient(135deg, #a6e4df, #4ea2ae 58%, #2f7a88);
+            box-shadow: 0 0 22px rgba(78, 162, 174, .38), inset 0 1px 0 rgba(255,255,255,.35);
         }
         .brand-name { font-size: 15px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
         .studio-badge {
             font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
-            color: var(--accent-ink); background: rgba(99,102,241,.10);
-            border: 1px solid rgba(129,140,248,.25); padding: 3px 7px; border-radius: 999px;
+            color: var(--accent-ink); background: var(--wash);
+            border: 1px solid rgba(111, 177, 203, .28); padding: 3px 7px; border-radius: 999px;
         }
         .brand-subtitle { margin-top: 2px; color: var(--muted); font-size: 11px; }
         .top-actions { display: flex; align-items: center; gap: 8px; }
         .palette-trigger {
             display: flex; align-items: center; gap: 8px;
             color: var(--muted); background: var(--inset);
-            border: 1px solid var(--border); border-radius: 11px;
+            border: 1px solid var(--border); border-radius: 10px;
             padding: 8px 10px; cursor: pointer; font-size: 11px; min-width: 190px;
         }
-        .palette-trigger:hover { border-color: var(--border-hover); color: var(--text); }
+        .palette-trigger:hover { border-color: var(--border-hover); color: var(--text); background: var(--wash); }
         .engine-pill {
             display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 999px;
-            color: #6ee7b7; background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.18);
+            color: var(--success-ink); background: rgba(53, 214, 160, .08); border: 1px solid rgba(53, 214, 160, .20);
             font-family: "JetBrains Mono", monospace; font-size: 10px; white-space: nowrap;
         }
-        body.light .engine-pill { color: #047857; }
-        .engine-dot { width: 7px; height: 7px; border-radius: 999px; background: #34d399; box-shadow: 0 0 12px rgba(52,211,153,.9); animation: pulse 2s infinite; }
+        body.light .engine-pill { color: #047857; background: rgba(5, 150, 105, .08); border-color: rgba(5, 150, 105, .20); }
+        .engine-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--success); box-shadow: 0 0 12px rgba(53, 214, 160, .9); animation: pulse 2s infinite; }
         @keyframes pulse { 50% { opacity: .4; transform: scale(.75); } }
         .icon-btn {
-            width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px;
+            width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px;
             border: 1px solid var(--border); background: var(--inset); color: var(--muted);
             cursor: pointer; transition: .18s ease;
         }
-        .icon-btn:hover { color: var(--text); border-color: var(--border-hover); transform: translateY(-1px); }
+        .icon-btn:hover { color: var(--accent-2); border-color: var(--border-hover); background: var(--wash); transform: translateY(-1px); }
         .avatar {
-            width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center;
-            font-size: 12px; font-weight: 800; color: white;
-            background: linear-gradient(135deg, #8b5cf6, #6366f1);
-            border: 1px solid rgba(255,255,255,.18);
+            width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+            font-size: 12px; font-weight: 800; color: #06222a;
+            background: linear-gradient(135deg, #a6e4df, #4ea2ae);
+            border: 1px solid rgba(166, 228, 223, .30);
         }
 
         /* ---------- Workspace ---------- */
@@ -171,28 +181,29 @@
 
         .section-label { color: var(--muted-2); font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
         .sidebar-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-        .mini-badge { padding: 4px 8px; border-radius: 7px; color: var(--accent-ink); background: rgba(99,102,241,.09); border: 1px solid rgba(99,102,241,.18); font-family: "JetBrains Mono", monospace; font-size: 9px; }
+        .mini-badge { padding: 4px 8px; border-radius: 7px; color: var(--accent-ink); background: var(--wash); border: 1px solid rgba(111, 177, 203, .22); font-family: "JetBrains Mono", monospace; font-size: 9px; }
 
-        .db-card { padding: 13px; border-radius: 15px; background: var(--panel-soft); border: 1px solid var(--border); margin-bottom: 16px; }
+        .db-card { padding: 13px; border-radius: 12px; background: var(--panel-soft); border: 1px solid var(--border); margin-bottom: 16px; }
         .db-title { display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 700; }
-        .db-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; color: var(--accent-ink); background: rgba(99,102,241,.10); border: 1px solid rgba(99,102,241,.18); flex-shrink: 0; }
-        .db-meta { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9.5px; margin-top: 8px; line-height: 1.7; }
+        .db-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; color: var(--accent-ink); background: var(--wash); border: 1px solid rgba(111, 177, 203, .22); flex-shrink: 0; }
+        .db-meta { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 10px; margin-top: 8px; line-height: 1.7; }
 
         .schema-tree { display: flex; flex-direction: column; gap: 5px; }
         .table-item {
             width: 100%; display: flex; align-items: center; justify-content: space-between;
-            padding: 10px 11px; border-radius: 11px; color: var(--muted);
+            padding: 10px 11px; border-radius: 10px; color: var(--muted);
             background: transparent; border: 1px solid transparent; cursor: pointer; transition: .16s ease;
             font-size: 12px; font-weight: 600;
         }
-        .table-item:hover, .table-item.active { color: var(--text); background: rgba(99,102,241,.09); border-color: rgba(99,102,241,.16); }
+        .table-item:hover { color: var(--text); background: var(--wash); border-color: rgba(111, 177, 203, .18); }
+        .table-item.active { color: var(--text); background: var(--wash-strong); border-color: var(--border-hover); }
         .table-left { display: flex; align-items: center; gap: 9px; }
-        .table-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 9px rgba(129,140,248,.7); flex-shrink: 0; }
+        .table-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 9px rgba(111, 177, 203, .8); flex-shrink: 0; }
         .table-count { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; }
         .schema-details { max-height: 0; overflow: hidden; transition: max-height .25s ease; }
         .schema-details.open { max-height: 260px; }
-        .columns { margin: 2px 0 8px 26px; padding: 8px 10px; border-left: 1px solid rgba(129,140,248,.22); color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 10px; line-height: 2; }
-        .column-key { color: var(--accent); font-weight: 600; }
+        .columns { margin: 2px 0 8px 26px; padding: 8px 10px; border-left: 1px solid rgba(111, 177, 203, .28); color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 10px; line-height: 2; }
+        .column-key { color: var(--accent-2); font-weight: 600; }
 
         .history-tools { display: flex; gap: 6px; margin-bottom: 8px; }
         #historySearch {
@@ -202,35 +213,35 @@
         #historySearch:focus { border-color: var(--border-hover); box-shadow: 0 0 0 3px var(--ring); }
         #historyList { max-height: 250px; overflow-y: auto; }
         .history-empty { padding: 12px 4px; color: var(--muted-2); font-size: 11px; line-height: 1.65; }
-        .history-item { padding: 10px 11px; margin-bottom: 6px; border-radius: 12px; background: var(--panel-soft); border: 1px solid var(--border); transition: .16s ease; }
-        .history-item:hover { border-color: rgba(129,140,248,.28); }
+        .history-item { padding: 10px 11px; margin-bottom: 6px; border-radius: 11px; background: var(--panel-soft); border: 1px solid var(--border); transition: .16s ease; }
+        .history-item:hover { border-color: rgba(111, 177, 203, .30); }
         .history-number { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
         .history-prompt { margin-top: 4px; color: var(--text-soft); font-size: 11px; line-height: 1.55; }
         .history-actions { display: flex; justify-content: flex-end; margin-top: 7px; }
-        .history-use { border: 1px solid rgba(99,102,241,.18); padding: 5px 8px; border-radius: 7px; color: var(--accent-ink); background: rgba(99,102,241,.09); cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 9px; }
-        .history-use:hover { background: rgba(99,102,241,.16); color: var(--text); }
+        .history-use { border: 1px solid rgba(111, 177, 203, .24); padding: 5px 8px; border-radius: 7px; color: var(--accent-ink); background: var(--wash); cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 9px; }
+        .history-use:hover { background: var(--wash-strong); color: var(--text); }
         .clear-btn {
             width: 100%; margin-top: 7px; padding: 9px; border-radius: 10px; color: var(--muted);
             background: var(--inset); border: 1px solid var(--border); cursor: pointer; font-size: 10px; font-weight: 600; transition: .16s ease;
         }
-        .clear-btn:hover { color: var(--danger); border-color: rgba(251,113,133,.3); background: rgba(244,63,94,.07); }
+        .clear-btn:hover { color: var(--danger); border-color: rgba(251, 113, 133, .34); background: rgba(251, 113, 133, .08); }
 
         /* ---------- Hero ---------- */
-        .hero { position: relative; overflow: hidden; padding: 26px 26px 22px; border-radius: 22px; }
-        .hero::before { content: ""; position: absolute; width: 340px; height: 340px; right: -140px; top: -170px; background: radial-gradient(circle, rgba(99,102,241,.24), transparent 68%); pointer-events: none; }
-        .hero::after { content: ""; position: absolute; width: 200px; height: 200px; left: -100px; bottom: -130px; background: radial-gradient(circle, rgba(34,211,238,.13), transparent 68%); pointer-events: none; }
+        .hero { position: relative; overflow: hidden; padding: 26px 26px 22px; border-radius: 18px; }
+        .hero::before { content: ""; position: absolute; width: 340px; height: 340px; right: -140px; top: -170px; background: radial-gradient(circle, rgba(78, 162, 174, .26), transparent 68%); pointer-events: none; }
+        .hero::after { content: ""; position: absolute; width: 200px; height: 200px; left: -100px; bottom: -130px; background: radial-gradient(circle, rgba(166, 228, 223, .12), transparent 68%); pointer-events: none; }
         .hero-top { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
-        .eyebrow { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 10px; color: var(--accent-ink); background: rgba(99,102,241,.09); border: 1px solid rgba(129,140,248,.22); font-size: 9.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; }
-        .eyebrow i { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+        .eyebrow { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 10px; color: var(--accent-ink); background: var(--wash); border: 1px solid rgba(111, 177, 203, .26); font-size: 9.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; }
+        .eyebrow i { width: 6px; height: 6px; border-radius: 999px; background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); }
         .hero h1 { margin: 0; font-size: clamp(28px, 4vw, 44px); line-height: 1.03; letter-spacing: -.04em; font-weight: 800; }
         .gradient-text { background: linear-gradient(100deg, var(--text), var(--accent) 52%, var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
         .hero-description { max-width: 660px; margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
         .hero-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; position: relative; z-index: 2; }
-        .stat-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; background: var(--panel-soft); border: 1px solid var(--border); font-size: 11px; color: var(--text-soft); }
+        .stat-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 11px; background: var(--panel-soft); border: 1px solid var(--border); font-size: 11px; color: var(--text-soft); }
         .stat-chip b { color: var(--text); }
         .stat-chip .mono { font-size: 10px; color: var(--muted); }
-        .mode-badge { flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 999px; color: var(--accent-ink); background: rgba(99,102,241,.09); border: 1px solid rgba(129,140,248,.24); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-        .mode-badge span { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 2s infinite; }
+        .mode-badge { flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 999px; color: var(--accent-ink); background: var(--wash); border: 1px solid rgba(111, 177, 203, .28); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+        .mode-badge span { width: 7px; height: 7px; border-radius: 999px; background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); animation: pulse 2s infinite; }
 
         /* ---------- Cards ---------- */
         .query-card, .panel { padding: 20px; border-radius: var(--radius); }
@@ -242,12 +253,12 @@
         .input-wrap { position: relative; }
         #promptInput {
             width: 100%; min-height: 128px; resize: vertical; outline: none; padding: 16px 16px 44px;
-            border-radius: 15px; color: var(--text); font-size: 13.5px; line-height: 1.65; transition: .18s ease;
-            background: radial-gradient(circle at 90% 8%, rgba(99,102,241,.10), transparent 40%), var(--inset);
+            border-radius: 12px; color: var(--text); font-size: 13.5px; line-height: 1.65; transition: .18s ease;
+            background: radial-gradient(circle at 90% 8%, var(--wash), transparent 40%), var(--inset);
             border: 1px solid var(--border);
         }
         #promptInput::placeholder { color: var(--muted-2); }
-        #promptInput:focus { border-color: var(--border-hover); box-shadow: 0 0 0 3px var(--ring), 0 0 34px rgba(99,102,241,.10); }
+        #promptInput:focus { border-color: var(--border-hover); box-shadow: 0 0 0 3px var(--ring), 0 0 30px rgba(111, 177, 203, .12); }
         .input-footer { position: absolute; bottom: 11px; left: 14px; right: 14px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
         .input-hint { color: var(--muted-2); font-size: 10px; }
         .ai-indicator { display: flex; align-items: center; gap: 6px; color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .08em; }
@@ -256,72 +267,84 @@
         .suggestions-title { margin-top: 13px; margin-bottom: 8px; color: var(--muted-2); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
         .suggestions { display: flex; flex-wrap: wrap; gap: 7px; }
         .suggestion { padding: 8px 12px; border-radius: 999px; color: var(--accent-ink); background: var(--inset); border: 1px solid var(--border); cursor: pointer; font-size: 11px; font-weight: 600; transition: .16s ease; }
-        .suggestion:hover { color: var(--text); background: rgba(99,102,241,.12); border-color: rgba(129,140,248,.4); transform: translateY(-1px); }
+        .suggestion:hover { color: var(--text); background: var(--wash-strong); border-color: var(--border-hover); transform: translateY(-1px); }
 
         .run-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
         .run-hint { color: var(--muted-2); font-size: 10px; }
         #runButton {
             min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 20px;
-            border: 0; border-radius: 13px; color: white; font-size: 12px; font-weight: 800; cursor: pointer; transition: .18s ease;
-            background: linear-gradient(100deg, #6366f1, #4f46e5 52%, #0891b2);
-            box-shadow: 0 12px 30px rgba(79,70,229,.28), inset 0 1px 0 rgba(255,255,255,.18);
+            border: 0; border-radius: 11px; color: white; font-size: 12px; font-weight: 800; cursor: pointer; transition: .18s ease;
+            background: linear-gradient(100deg, #2f7a88, #1f6572 54%, #175a66);
+            box-shadow: 0 8px 22px rgba(23, 90, 102, .34), inset 0 1px 0 rgba(255,255,255,.16);
         }
-        #runButton:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 16px 36px rgba(79,70,229,.34); filter: brightness(1.05); }
+        #runButton:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(23, 90, 102, .42), 0 0 22px rgba(111, 177, 203, .18); filter: brightness(1.08); }
         #runButton:disabled { opacity: .6; cursor: wait; }
 
         .panel-title { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-        .panel-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 9px rgba(129,140,248,.8); }
-        .status { padding: 6px 9px; border-radius: 8px; color: #6ee7b7; background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.16); font-family: "JetBrains Mono", monospace; font-size: 10px; white-space: nowrap; }
-        body.light .status { color: #047857; }
+        .panel-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 9px rgba(111, 177, 203, .85); }
+        .status { padding: 6px 9px; border-radius: 8px; color: var(--success-ink); background: rgba(53, 214, 160, .08); border: 1px solid rgba(53, 214, 160, .20); font-family: "JetBrains Mono", monospace; font-size: 10px; white-space: nowrap; }
+        body.light .status { color: #047857; background: rgba(5, 150, 105, .08); border-color: rgba(5, 150, 105, .20); }
 
-        #explanationBox { padding: 13px 14px; margin-bottom: 11px; border-radius: 13px; color: var(--accent-ink); background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.18); font-size: 12px; line-height: 1.65; }
-        .code-window { overflow: hidden; border-radius: 15px; background: #020617; border: 1px solid rgba(148,163,184,.14); }
-        .window-bar { height: 38px; display: flex; align-items: center; justify-content: space-between; padding: 0 11px; background: rgba(15,23,42,.75); border-bottom: 1px solid rgba(148,163,184,.10); }
+        #explanationBox { padding: 13px 14px; margin-bottom: 11px; border-radius: 12px; color: var(--accent-ink); background: var(--wash); border: 1px solid rgba(111, 177, 203, .20); font-size: 12px; line-height: 1.65; }
+        .code-window { overflow: hidden; border-radius: 12px; background: var(--inset); border: 1px solid var(--border); }
+        .window-bar { height: 38px; display: flex; align-items: center; justify-content: space-between; padding: 0 11px; background: var(--panel-strong); border-bottom: 1px solid var(--border); }
         .window-left { display: flex; align-items: center; gap: 10px; }
         .window-dots { display: flex; gap: 5px; }
-        .window-dots span { width: 7px; height: 7px; border-radius: 999px; background: #334155; }
+        .window-dots span { width: 7px; height: 7px; border-radius: 999px; background: #33343a; }
         .window-dots span:first-child { background: #fb7185; }
         .window-dots span:nth-child(2) { background: #fbbf24; }
         .window-dots span:nth-child(3) { background: #34d399; }
-        .code-label { color: #64748b; font-family: "JetBrains Mono", monospace; font-size: 10px; }
+        .code-label { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 10px; }
         .code-actions { display: flex; gap: 6px; }
-        .code-action { padding: 5px 8px; border-radius: 7px; color: #94a3b8; background: rgba(148,163,184,.07); border: 1px solid rgba(148,163,184,.12); cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 9px; }
-        .code-action:hover { color: white; border-color: rgba(129,140,248,.3); background: rgba(99,102,241,.12); }
+        .code-action { padding: 5px 8px; border-radius: 7px; color: var(--muted); background: rgba(255,255,255,.04); border: 1px solid var(--border); cursor: pointer; font-family: "JetBrains Mono", monospace; font-size: 9px; }
+        .code-action:hover { color: var(--accent-2); border-color: var(--border-hover); background: var(--wash); }
         .sql-editor { display: grid; grid-template-columns: 46px minmax(0, 1fr); min-height: 104px; max-height: 300px; overflow: auto; }
-        .line-numbers { padding: 15px 8px; color: #334155; text-align: right; border-right: 1px solid rgba(148,163,184,.09); font-family: "JetBrains Mono", monospace; font-size: 11px; line-height: 1.7; user-select: none; }
-        #sqlOutput { display: block; padding: 15px; color: #6ee7b7; font-family: "JetBrains Mono", monospace; font-size: 12px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+        .line-numbers { padding: 15px 8px; color: var(--muted-2); text-align: right; border-right: 1px solid var(--border); font-family: "JetBrains Mono", monospace; font-size: 11px; line-height: 1.7; user-select: none; }
+        #sqlOutput { display: block; padding: 15px; color: var(--accent-2); font-family: "JetBrains Mono", monospace; font-size: 12px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 
         .result-metrics { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
         .metric { padding: 5px 8px; border-radius: 7px; color: var(--muted-2); background: var(--inset); border: 1px solid var(--border); font-family: "JetBrains Mono", monospace; font-size: 10px; }
-        .export-btn { padding: 7px 10px; border-radius: 9px; color: #6ee7b7; background: rgba(52,211,153,.07); border: 1px solid rgba(52,211,153,.18); cursor: pointer; font-size: 10px; font-weight: 700; transition: .16s ease; }
-        body.light .export-btn { color: #047857; }
-        .export-btn:hover:not(:disabled) { background: rgba(52,211,153,.13); }
+        .export-btn { padding: 7px 10px; border-radius: 9px; color: var(--success-ink); background: rgba(53, 214, 160, .07); border: 1px solid rgba(53, 214, 160, .20); cursor: pointer; font-size: 10px; font-weight: 700; transition: .16s ease; }
+        body.light .export-btn { color: #047857; background: rgba(5, 150, 105, .07); border-color: rgba(5, 150, 105, .20); }
+        .export-btn:hover:not(:disabled) { background: rgba(53, 214, 160, .14); }
         .export-btn:disabled { opacity: .4; cursor: not-allowed; }
-        .export-btn.secondary { color: var(--accent-ink); background: rgba(99,102,241,.09); border-color: rgba(99,102,241,.22); }
-        .export-btn.secondary:hover:not(:disabled) { background: rgba(99,102,241,.16); }
+        .export-btn.secondary { color: var(--accent-ink); background: var(--wash); border-color: rgba(111, 177, 203, .24); }
+        .export-btn.secondary:hover:not(:disabled) { background: var(--wash-strong); }
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-        .results-window { overflow: hidden; border-radius: 15px; background: var(--inset); border: 1px solid var(--border); }
+        .results-window { overflow: hidden; border-radius: 12px; background: var(--inset); border: 1px solid var(--border); }
         #dataOutput { min-height: 150px; max-height: 460px; overflow: auto; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; }
         .empty-state { text-align: center; padding: 34px 20px; color: var(--muted-2); }
-        .empty-state-icon { width: 44px; height: 44px; margin: 0 auto 10px; display: grid; place-items: center; border-radius: 13px; background: rgba(99,102,241,.09); border: 1px solid rgba(99,102,241,.18); color: var(--accent-ink); }
+        .empty-state-icon { width: 44px; height: 44px; margin: 0 auto 10px; display: grid; place-items: center; border-radius: 12px; background: var(--wash); border: 1px solid rgba(111, 177, 203, .22); color: var(--accent-ink); }
         #dataOutput table { width: 100%; min-width: 620px; border-collapse: collapse; }
         #dataOutput thead { position: sticky; top: 0; z-index: 2; }
         #dataOutput th { padding: 11px 13px; color: var(--muted); background: var(--panel-strong); border-bottom: 1px solid var(--border-strong); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; text-align: left; }
         #dataOutput td { padding: 10px 13px; color: var(--text-soft); border-bottom: 1px solid var(--border); font-family: "JetBrains Mono", monospace; font-size: 11px; white-space: nowrap; }
-        #dataOutput tbody tr:hover td { background: rgba(99,102,241,.06); }
-        .chart-panel { margin-top: 12px; padding: 15px; border-radius: 15px; background: var(--panel-soft); border: 1px solid var(--border); }
+        #dataOutput tbody tr:hover td { background: var(--wash); }
+        .chart-panel { margin-top: 12px; padding: 15px; border-radius: 12px; background: var(--panel-soft); border: 1px solid var(--border); }
+
+        /* ---------- Provenance: where the rows came from ---------- */
+        .provenance { margin-top: 12px; padding: 15px; border-radius: 12px; background: var(--panel-soft); border: 1px solid var(--border); }
+        .provenance-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+        .provenance-badge { padding: 5px 9px; border-radius: 999px; color: var(--warning); background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .24); font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+        body.light .provenance-badge { color: #92400e; background: rgba(217, 119, 6, .08); border-color: rgba(217, 119, 6, .24); }
+        .provenance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 0; }
+        .provenance-grid > div { padding: 9px 11px; border-radius: 10px; background: var(--inset); border: 1px solid var(--border); min-width: 0; }
+        .provenance-grid dt { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+        .provenance-grid dd { margin: 4px 0 0; color: var(--text-soft); font-size: 11.5px; line-height: 1.5; overflow-wrap: anywhere; }
+        .provenance-grid dd.mono { font-family: "JetBrains Mono", monospace; font-size: 10.5px; }
+        .provenance-note { margin: 11px 0 0; padding: 10px 11px; border-radius: 10px; color: var(--text-soft); background: var(--wash); border: 1px solid rgba(111, 177, 203, .18); font-size: 11px; line-height: 1.6; }
 
         /* ---------- Palette / toast / footer ---------- */
-        .palette-backdrop { position: fixed; inset: 0; display: none; align-items: flex-start; justify-content: center; padding: 12vh 16px 20px; background: rgba(2,6,23,.66); backdrop-filter: blur(8px); z-index: 100; }
+        .palette-backdrop { position: fixed; inset: 0; display: none; align-items: flex-start; justify-content: center; padding: 12vh 16px 20px; background: rgba(10, 10, 12, .72); backdrop-filter: blur(8px); z-index: 100; }
         .palette-backdrop.open { display: flex; }
-        .command-palette { width: min(580px, 100%); overflow: hidden; border-radius: 18px; background: var(--panel-strong); border: 1px solid var(--border-hover); box-shadow: 0 35px 100px rgba(0,0,0,.45); }
+        .command-palette { width: min(580px, 100%); overflow: hidden; border-radius: 16px; background: var(--panel-strong); border: 1px solid var(--border-hover); box-shadow: 0 18px 50px rgba(0,0,0,.55); }
         .palette-search { width: 100%; padding: 15px 16px; border: 0; border-bottom: 1px solid var(--border); outline: none; color: var(--text); background: transparent; font-size: 13px; }
         .palette-list { padding: 8px; max-height: 360px; overflow-y: auto; }
-        .command-item { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 11px 12px; border-radius: 11px; border: 1px solid transparent; color: var(--text-soft); background: transparent; cursor: pointer; text-align: left; font-size: 12px; }
-        .command-item:hover, .command-item.selected { background: rgba(99,102,241,.10); border-color: rgba(99,102,241,.16); }
+        .command-item { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 11px 12px; border-radius: 10px; border: 1px solid transparent; color: var(--text-soft); background: transparent; cursor: pointer; text-align: left; font-size: 12px; }
+        .command-item:hover, .command-item.selected { background: var(--wash); border-color: rgba(111, 177, 203, .20); }
         .command-key { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; }
-        .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; padding: 10px 14px; border-radius: 11px; color: white; background: rgba(10,17,31,.94); border: 1px solid rgba(129,140,248,.3); box-shadow: var(--shadow-sm); font-family: "JetBrains Mono", monospace; font-size: 11px; pointer-events: none; transition: .25s ease; z-index: 150; }
+        .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; padding: 10px 14px; border-radius: 11px; color: white; background: var(--panel-strong); border: 1px solid var(--border-hover); box-shadow: var(--shadow-sm); font-family: "JetBrains Mono", monospace; font-size: 11px; pointer-events: none; transition: .25s ease; z-index: 150; }
         .toast.show { opacity: 1; transform: translate(-50%, 0); }
         .footer-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 4px; color: var(--muted-2); font-size: 10px; }
         .footer-brand { color: var(--muted); font-weight: 800; letter-spacing: .08em; }
@@ -333,7 +356,7 @@
         @keyframes thinking { 50% { opacity: .45; } }
 
         .sidebar::-webkit-scrollbar, #historyList::-webkit-scrollbar, .sql-editor::-webkit-scrollbar, #dataOutput::-webkit-scrollbar { width: 6px; height: 6px; }
-        .sidebar::-webkit-scrollbar-thumb, #historyList::-webkit-scrollbar-thumb, .sql-editor::-webkit-scrollbar-thumb, #dataOutput::-webkit-scrollbar-thumb { background: rgba(148,163,184,.22); border-radius: 999px; }
+        .sidebar::-webkit-scrollbar-thumb, #historyList::-webkit-scrollbar-thumb, .sql-editor::-webkit-scrollbar-thumb, #dataOutput::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .12); border-radius: 999px; }
 
         @media (max-width: 1050px) {
             .workspace { grid-template-columns: 1fr; }
@@ -344,12 +367,12 @@
         }
         @media (max-width: 700px) {
             .app-shell { width: calc(100% - 14px); padding-top: 8px; }
-            .topbar { top: 6px; border-radius: 15px; padding: 10px 11px; }
+            .topbar { top: 6px; border-radius: 12px; padding: 10px 11px; }
             .brand-subtitle, .engine-pill { display: none; }
-            .hero { padding: 20px; border-radius: 18px; }
+            .hero { padding: 20px; border-radius: 15px; }
             .hero-top { display: block; }
             .mode-badge { margin-top: 13px; }
-            .query-card, .panel, .sidebar { border-radius: 18px; }
+            .query-card, .panel, .sidebar { border-radius: 15px; }
             .shortcut, .run-hint, .code-actions { display: none; }
             .run-row { display: block; }
             #runButton { width: 100%; }
@@ -359,31 +382,86 @@
         @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
 
         /* ---------- Workspace panels (sessions / upload / approvals) ---------- */
-        .workspace-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 18px 0 4px; padding: 12px 16px; border-radius: 15px; background: var(--panel-soft); border: 1px solid var(--border); }
+        .workspace-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 18px 0 4px; padding: 12px 16px; border-radius: 12px; background: var(--panel-soft); border: 1px solid var(--border); }
         .ws-session { display: flex; align-items: center; gap: 8px; font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--muted); }
-        .ws-dot { width: 8px; height: 8px; border-radius: 999px; background: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,.15); }
+        .ws-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--success); box-shadow: 0 0 0 3px rgba(53, 214, 160, .16); }
         .ws-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .workspace-palette { width: min(700px, 100%); max-height: min(640px, 90vh); overflow-y: auto; border-radius: 18px; background: var(--panel-strong); border: 1px solid var(--border-hover); box-shadow: 0 35px 100px rgba(0,0,0,.45); padding: 18px; }
+        .workspace-palette { width: min(700px, 100%); max-height: min(640px, 90vh); overflow-y: auto; border-radius: 16px; background: var(--panel-strong); border: 1px solid var(--border-hover); box-shadow: 0 18px 50px rgba(0,0,0,.55); padding: 18px; }
         .workspace-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
         .workspace-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
-        .ws-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px; border-radius: 11px; border: 1px solid var(--border); background: var(--inset); color: var(--text-soft); font-size: 12px; }
+        .ws-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--inset); color: var(--text-soft); font-size: 12px; }
         .ws-row + .ws-row { margin-top: 6px; }
-        .ws-row.active { border-color: rgba(99,102,241,.35); background: rgba(99,102,241,.08); }
+        .ws-row.active { border-color: var(--border-hover); background: var(--wash-strong); }
         .ws-row-main { min-width: 0; }
         .ws-row-title { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .ws-row-sub { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; margin-top: 3px; }
         .ws-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-        .ws-upload-zone { border: 1.5px dashed var(--border-strong); border-radius: 14px; padding: 14px; background: var(--inset); }
-        .ws-file-input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 11px; background: var(--inset); color: var(--text-soft); font-size: 12px; }
-        .ws-hint { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9.5px; margin-top: 8px; line-height: 1.6; }
-        .approval-sql { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--muted); background: var(--inset); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; margin: 8px 0 10px; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; }
+        .ws-upload-zone { border: 1.5px dashed var(--border-strong); border-radius: 12px; padding: 14px; background: var(--inset); }
+        .ws-file-input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-soft); color: var(--text-soft); font-size: 12px; }
+        .ws-hint { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 10px; margin-top: 8px; line-height: 1.6; }
+        .approval-sql { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--muted); background: var(--inset); border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; margin: 8px 0 10px; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; }
         .ws-mono { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--muted); }
         .ws-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-        .ws-tag { padding: 4px 9px; border-radius: 999px; background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.22); color: var(--accent-ink); font-size: 10px; }
+        .ws-tag { padding: 4px 9px; border-radius: 999px; background: var(--wash); border: 1px solid rgba(111, 177, 203, .24); color: var(--accent-ink); font-size: 10px; }
+
+        /* ---------- Sign in gate ---------- */
+        /* Shown only when a protected API call answers 401. The form is a
+           native HTML form: the browser posts it directly, so no script
+           ever reads, stores, or transmits the secret. */
+        .auth-gate { display: none; }
+        .auth-gate.open { display: flex; }
+        .auth-backdrop {
+            position: fixed; inset: 0; z-index: 200;
+            align-items: center; justify-content: center;
+            padding: 24px; background: var(--bg);
+        }
+        .auth-card {
+            width: 100%; max-width: 380px; text-align: center;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 18px; padding: 28px 26px;
+        }
+        .auth-title { font-size: 15px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+        .auth-hint { margin: 8px 0 20px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+        .auth-field {
+            width: 100%; box-sizing: border-box;
+            color: var(--text); background: var(--inset);
+            border: 1px solid var(--border); border-radius: 10px;
+            padding: 11px 12px; font-size: 13px;
+            font-family: "JetBrains Mono", monospace;
+        }
+        .auth-field:focus { outline: none; border-color: var(--border-hover); background: var(--wash); }
+        .auth-submit {
+            width: 100%; margin-top: 12px; cursor: pointer;
+            color: #06222a; background: linear-gradient(135deg, #a6e4df, #4ea2ae 58%, #2f7a88);
+            border: none; border-radius: 10px; padding: 11px 12px;
+            font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+        }
     </style>
 </head>
 
 <body>
+
+<!-- Sign-in gate. Hidden until a protected API call answers 401. The
+     form posts natively to /api/auth/login-form, so the secret is
+     submitted by the browser and never enters JavaScript. -->
+<div class="auth-backdrop auth-gate" id="authGate">
+    <form class="auth-card" method="post" action="/api/auth/login-form">
+        <div class="auth-title">Sign in</div>
+        <div class="auth-hint">
+            This workspace is protected. Enter the application
+            access key to continue.
+        </div>
+        <input
+            class="auth-field"
+            type="password"
+            name="password"
+            placeholder="Access key"
+            autocomplete="current-password"
+            required
+        >
+        <button class="auth-submit" type="submit">Sign in</button>
+    </form>
+</div>
 
 <div class="app-shell">
 
@@ -414,6 +492,11 @@
             </button>
             <button class="icon-btn" onclick="openCommandPalette()" title="Command palette — Ctrl + K" aria-label="Open command palette">
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+            </button>
+            <button id="signOutBtn" class="icon-btn" onclick="signOut()" title="Sign out" aria-label="Sign out">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M15 17l5-5-5-5m5 5H9m3 8H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" />
+                </svg>
             </button>
             <div class="avatar" title="Local workspace">TX</div>
         </div>
@@ -448,7 +531,7 @@
             <div class="mt-7">
                 <div class="sidebar-heading">
                     <span class="section-label">Query History</span>
-                    <span id="memoryBadge" class="text-[9px] text-slate-500 font-mono">0 turns</span>
+                    <span id="memoryBadge" class="mono text-[9px] text-[#8a8c92]">0 turns</span>
                 </div>
 
                 <div class="history-tools">
@@ -468,15 +551,15 @@
                 <div class="hero-top">
                     <div>
                         <div class="eyebrow"><i></i>AI Database Workspace</div>
-                        <h1>Ask your database.<br><span class="gradient-text">Get trusted SQL.</span></h1>
-                        <p class="hero-description">Describe what you need in plain English. TIIX generates safe, read-only SQLite, explains each query, and renders results plus automatic visualizations.</p>
+                        <h1>Ask your database.<br><span class="gradient-text">Get readable SQL.</span></h1>
+                        <p class="hero-description">Describe what you need in plain English. TIIX generates read-only SQLite, shows you exactly what it ran and where the rows came from, explains each query, and renders results plus automatic visualizations.</p>
                     </div>
                     <div class="mode-badge"><span></span>TIIX AI Mode</div>
                 </div>
                 <div class="hero-stats">
                     <span class="stat-chip"><b>Live schema</b><span class="mono">/api/schema</span></span>
                     <span class="stat-chip"><b>Conversational</b><span class="mono">10-turn memory</span></span>
-                    <span class="stat-chip"><b>Safe by default</b><span class="mono">SELECT-only</span></span>
+                    <span class="stat-chip"><b>Read-only enforced</b><span class="mono">SELECT-only</span></span>
                 </div>
             </section>
 
@@ -532,7 +615,7 @@
                 <div class="panel-header">
                     <div>
                         <div class="panel-title">Generated SQLite Query</div>
-                        <div class="panel-sub">Review before you trust — copy or clear anytime.</div>
+                        <div class="panel-sub">Read it before you rely on it — copy or clear anytime.</div>
                     </div>
                     <span id="sqlStatus" class="status">Ready</span>
                 </div>
@@ -561,7 +644,7 @@
                 <div class="panel-header">
                     <div>
                         <div class="panel-title">Query Execution Results</div>
-                        <div class="panel-sub">Live output from the SQLite engine</div>
+                        <div class="panel-sub">Live output from the SQLite engine — these are the rows the query returned, not a confirmed answer</div>
                     </div>
                     <div class="result-metrics">
                         <span id="resultMetric" class="metric">0 rows</span>
@@ -587,6 +670,23 @@
                         <button id="downloadChartButton" onclick="downloadChart()" class="export-btn secondary">Download Chart</button>
                     </div>
                     <div class="relative h-64 md:h-80"><canvas id="resultsChart" role="img" aria-label="Automatic visualization of query results"></canvas></div>
+                </div>
+
+                <div id="provenancePanel" class="provenance hidden">
+                    <div class="provenance-head">
+                        <div class="panel-title">Where these rows came from</div>
+                        <span id="verificationBadge" class="provenance-badge">Not verified</span>
+                    </div>
+                    <dl class="provenance-grid">
+                        <div><dt>Source</dt><dd id="provSource">—</dd></div>
+                        <div><dt>Fingerprint</dt><dd id="provDigest" class="mono">—</dd></div>
+                        <div><dt>Written by</dt><dd id="provModel">—</dd></div>
+                        <div><dt>Executed</dt><dd id="provExecuted">—</dd></div>
+                        <div><dt>Duration</dt><dd id="provElapsed">—</dd></div>
+                        <div><dt>Rows</dt><dd id="provRows">—</dd></div>
+                        <div><dt>Request</dt><dd id="provRequestId" class="mono">—</dd></div>
+                    </dl>
+                    <p id="provenanceNote" class="provenance-note"></p>
                 </div>
             </section>
 
@@ -669,18 +769,71 @@
 <script>
 
     /* =====================================================
+       AUTHENTICATION HANDSHAKE
+    =====================================================
+       The session lives entirely in an HttpOnly cookie that the
+       browser attaches to every same-origin request on its own.
+       This code never holds a credential: it only reveals the
+       sign-in form when the server refuses a call with 401, and
+       posts nothing. The credential is typed into the native
+       form in the markup, which the browser submits directly to
+       /api/auth/login-form; no script reads or sends it.
+    ===================================================== */
+
+        function showSignIn() {
+
+            const gate =
+                document.getElementById("authGate");
+
+            if (gate) {
+                gate.classList.add("open");
+            }
+
+        }
+
+        function signOut() {
+
+            /* Server clears the HttpOnly cookie. The client never
+               touches cookie storage. */
+            fetch("/api/auth/logout", {
+                method: "POST"
+            }).then(function () {
+
+                window.location.reload();
+
+            });
+
+        }
+
+        /* Returns true when the response was an authentication
+           failure, so the caller can stop early instead of
+           rendering a confusing error. */
+        function handleAuthFailure(response) {
+
+            if (response.status === 401) {
+
+                showSignIn();
+                return true;
+
+            }
+
+            return false;
+
+        }
+
+    /* =====================================================
        GLOBAL STATE
     ===================================================== */
 
-    const CHART_COLORS = [
-        "#818cf8",
-        "#34d399",
-        "#f472b6",
-        "#38bdf8",
-        "#fbbf24",
-        "#a78bfa",
-        "#fb7185",
-        "#2dd4bf"
+        const CHART_COLORS = [
+        "#6fb1cb",
+        "#a6e4df",
+        "#4ea2ae",
+        "#bda8cf",
+        "#7fd4c4",
+        "#ffb95a",
+        "#5c7fd1",
+        "#e0857a",
     ];
 
     let sessionHistory = [];
@@ -691,6 +844,8 @@
     let lastCount = 0;
     let lastTruncated = false;
     let lastQueryTime = null;
+    let lastProvenance = null;
+    let lastVerification = null;
     let currentSessionId = null;
     let resultsChart = null;
 
@@ -1032,6 +1187,10 @@
             const response =
                 await fetch("/api/schema");
 
+            if (handleAuthFailure(response)) {
+                return;
+            }
+
             if (!response.ok) {
                 throw new Error(
                     `Schema request failed (${response.status})`
@@ -1258,6 +1417,7 @@
         lastCount = 0;
         lastTruncated = false;
         lastQueryTime = null;
+        clearProvenance();
 
         renderHistory();
 
@@ -1507,6 +1667,10 @@
                     }
                 );
 
+            if (handleAuthFailure(response)) {
+                return;
+            }
+
 
             const result =
                 await response.json();
@@ -1533,6 +1697,8 @@
             lastExplanation = result.explanation || "";
             lastCount = result.count || 0;
             lastTruncated = Boolean(result.truncated);
+            lastProvenance = result.provenance || null;
+            lastVerification = result.verification || null;
             lastQueryTime = new Date();
 
 
@@ -1599,6 +1765,12 @@
             );
 
 
+            renderProvenance(
+                lastProvenance,
+                lastVerification
+            );
+
+
             sessionHistory.push({
                 prompt,
                 sql: lastSql
@@ -1648,7 +1820,7 @@
             document.getElementById(
                 "dataOutput"
             ).innerHTML = `
-                <p class="text-rose-400 px-4 py-8">
+                <p class="text-[#fb7185] px-4 py-8">
                     ${escapeHtml(
                         error.message ||
                         "Error connecting to server backend."
@@ -1658,6 +1830,9 @@
 
 
             hideChart();
+
+
+            clearProvenance();
 
 
             document.getElementById(
@@ -1748,7 +1923,7 @@
 
 
             container.innerHTML = `
-                <span class="text-slate-500">
+                <span class="text-[#8a8c92]">
                     No results found in database.
                 </span>
             `;
@@ -1900,14 +2075,14 @@
 
         const textColor =
             light
-                ? "#475569"
-                : "#cbd5e1";
+                ? "#5a5c61"
+                : "#c9cbd0";
 
 
         const tickColor =
             light
-                ? "#64748b"
-                : "#94a3b8";
+                ? "#6e7075"
+                : "#8a8c92";
 
 
         if (
@@ -2047,7 +2222,7 @@
 
                     borderColor:
                         usePie
-                            ? "#020617"
+                            ? "#0f1016"
                             : CHART_COLORS[
                                 index %
                                 CHART_COLORS.length
@@ -2107,8 +2282,8 @@
 
                                     color:
                                         light
-                                            ? "#475569"
-                                            : "#cbd5e1",
+                                            ? "#5a5c61"
+                                            : "#c9cbd0",
 
                                     font: {
                                         size: 10
@@ -2130,15 +2305,15 @@
                                         ticks: {
                                             color:
                                                 light
-                                                    ? "#64748b"
-                                                    : "#94a3b8"
+                                                    ? "#6e7075"
+                                                    : "#8a8c92"
                                         },
 
                                         grid: {
                                             color:
                                                 light
                                                     ? "rgba(15,23,42,.08)"
-                                                    : "rgba(148,163,184,.10)"
+                                                    : "rgba(255,255,255,.07)"
                                         }
 
                                     },
@@ -2151,15 +2326,15 @@
                                         ticks: {
                                             color:
                                                 light
-                                                    ? "#64748b"
-                                                    : "#94a3b8"
+                                                    ? "#6e7075"
+                                                    : "#8a8c92"
                                         },
 
                                         grid: {
                                             color:
                                                 light
                                                     ? "rgba(15,23,42,.08)"
-                                                    : "rgba(148,163,184,.10)"
+                                                    : "rgba(255,255,255,.07)"
                                         }
 
                                     }
@@ -2175,9 +2350,295 @@
     }
 
 
+/* =====================================================
+       PROVENANCE — WHERE THE ROWS CAME FROM
+       ===================================================== */
+
+    // Shown instead of a value the server could not establish. A
+    // dash or an empty cell reads like "nothing to report", which
+    // is a different claim from "this fact is unavailable".
+    const PROVENANCE_UNAVAILABLE = "unavailable";
+
+    // The badge text is a constant, never the server's status
+    // string. The server says "not_verified" and there is no other
+    // value it can say, but a UI that echoed whatever it received
+    // would be one bad field away from announcing that an answer
+    // had been checked. This sentence is true regardless.
+    const VERIFICATION_BADGE = "Not verified";
+
+    // Used when a response carries no verification note at all,
+    // which is what an older backend or a proxy-mangled body looks
+    // like. It still says the honest thing.
+    const FALLBACK_NOTE =
+        "The query was written by a language model and ran " +
+        "read-only. Nothing checked that it answers your " +
+        "question or that the rows are right.";
+
+
+    function provenanceValue(value) {
+
+        if (value === null || value === undefined) {
+            return PROVENANCE_UNAVAILABLE;
+        }
+
+        const text = String(value).trim();
+
+        return text ? text : PROVENANCE_UNAVAILABLE;
+    }
+
+
+    function provenanceLabel(id, value) {
+
+        const element =
+            document.getElementById(id);
+
+        if (element) {
+            element.textContent = value;
+        }
+    }
+
+
+    function provenanceCount(value) {
+
+        const count = Number(value);
+
+        return Number.isFinite(count)
+            ? count.toLocaleString()
+            : PROVENANCE_UNAVAILABLE;
+    }
+
+
+    function provenanceModel(block) {
+
+        const parts = [
+            provenanceValue(block.provider),
+            provenanceValue(block.model)
+        ].filter(
+            part => part !== PROVENANCE_UNAVAILABLE
+        );
+
+        return parts.length
+            ? parts.join(" / ")
+            : PROVENANCE_UNAVAILABLE;
+    }
+
+
+    function provenanceWhen(value) {
+
+        const text = provenanceValue(value);
+
+        if (text === PROVENANCE_UNAVAILABLE) {
+            return text;
+        }
+
+        const moment = new Date(text);
+
+        return Number.isNaN(moment.getTime())
+            ? text
+            : moment.toLocaleString();
+    }
+
+
+    function provenanceNumber(value) {
+
+        // Number(null) and Number("") are both 0, and 0 is a
+        // perfectly good row count, so an absent value has to be
+        // rejected before the conversion rather than after it.
+        if (
+            value === null ||
+            value === undefined ||
+            typeof value === "boolean"
+        ) {
+            return null;
+        }
+
+        const number = Number(value);
+
+        return Number.isFinite(number)
+            ? number
+            : null;
+    }
+
+
+    function provenanceDuration(value) {
+
+        const duration =
+            provenanceNumber(value);
+
+        if (duration === null) {
+            return PROVENANCE_UNAVAILABLE;
+        }
+
+        return `${Math.round(duration)} ms`;
+    }
+
+
+    function provenanceRows(block) {
+
+        const returned =
+            provenanceNumber(block.rows_returned);
+
+        if (returned === null) {
+            return PROVENANCE_UNAVAILABLE;
+        }
+
+        // total_matched is reported only when the whole result set
+        // was read. When it is absent the query may have matched far
+        // more rows than arrived, so the count is not presented as a
+        // total.
+        const matched =
+            provenanceNumber(block.total_matched);
+
+        if (matched !== null) {
+            return `${returned.toLocaleString()} of ${matched.toLocaleString()} matched`;
+        }
+
+        return returned.toLocaleString() +
+            (block.truncated
+                ? " returned (truncated, more rows matched)"
+                : " returned");
+    }
+
+
+    function renderProvenance(block, verification) {
+
+        const panel =
+            document.getElementById(
+                "provenancePanel"
+            );
+
+        if (!panel) {
+            return;
+        }
+
+        // Without a block there is nothing to describe, and a panel
+        // of placeholders beside a table of rows reads like a
+        // statement about the answer rather than about the metadata.
+        if (!block || typeof block !== "object") {
+            panel.classList.add("hidden");
+            return;
+        }
+
+        provenanceLabel(
+            "provSource",
+            provenanceValue(block.source_database)
+        );
+
+        provenanceLabel(
+            "provDigest",
+            provenanceValue(block.source_sha256)
+        );
+
+        provenanceLabel(
+            "provModel",
+            provenanceModel(block)
+        );
+
+        provenanceLabel(
+            "provExecuted",
+            provenanceWhen(block.executed_at)
+        );
+
+        provenanceLabel(
+            "provElapsed",
+            provenanceDuration(block.elapsed_ms)
+        );
+
+        provenanceLabel(
+            "provRows",
+            provenanceRows(block)
+        );
+
+        provenanceLabel(
+            "provRequestId",
+            provenanceValue(block.request_id)
+        );
+
+        const badge =
+            document.getElementById(
+                "verificationBadge"
+            );
+
+        if (badge) {
+            badge.textContent = VERIFICATION_BADGE;
+        }
+
+        const note =
+            document.getElementById(
+                "provenanceNote"
+            );
+
+        if (note) {
+
+            const supplied =
+                verification &&
+                typeof verification.note === "string"
+                    ? verification.note.trim()
+                    : "";
+
+            note.textContent =
+                supplied || FALLBACK_NOTE;
+        }
+
+        panel.classList.remove("hidden");
+    }
+
+
+    function clearProvenance() {
+
+        lastProvenance = null;
+        lastVerification = null;
+
+        const panel =
+            document.getElementById(
+                "provenancePanel"
+            );
+
+        if (panel) {
+            panel.classList.add("hidden");
+        }
+    }
+
+
+    // The three provenance values the server-side report echoes back.
+    // They are sent raw rather than prettified: the server re-checks
+    // each one against the same shape it published, so a value that
+    // was never a digest or a basename is dropped there instead of
+    // being trusted because it came from this tab.
+    function provenanceFact(field) {
+
+        const value =
+            lastProvenance
+                ? lastProvenance[field]
+                : null;
+
+        return typeof value === "string"
+            ? value
+            : "";
+    }
+
+
+    function sourceLabel() {
+
+        return provenanceFact("source_database");
+    }
+
+
+    function digestLabel() {
+
+        return provenanceFact("source_sha256");
+    }
+
+
+    function modelLabel() {
+
+        return provenanceFact("model");
+    }
+
+
     /* =====================================================
        EXPORT STATE
-    ===================================================== */
+       ===================================================== */
 
     function chartAvailable() {
 
@@ -2440,6 +2901,16 @@
             const generatedAt =
                 lastQueryTime || new Date();
 
+            // The exported document names the database the rows
+            // actually came from, taken from the provenance of this
+            // result rather than hardcoded. A report that outlives
+            // this tab must not claim a source it cannot support.
+            const sourceName =
+                lastProvenance &&
+                lastProvenance.source_database
+                    ? lastProvenance.source_database
+                    : "unknown source";
+
             const footer = () => {
 
                 const total =
@@ -2453,7 +2924,7 @@
                     doc.setTextColor(148, 163, 184);
 
                     doc.text(
-                        "TIIX SQL Studio · store.db",
+                        `TIIX SQL Studio · ${sourceName} · not verified`,
                         margin,
                         pageHeight - 22
                     );
@@ -2489,8 +2960,8 @@
                 56
             );
             doc.text(
-                "Database: store.db · Status: " +
-                (lastCount > 0 ? "Success" : "Success — no rows"),
+                `Database: ${sourceName} · Execution: ` +
+                (lastCount > 0 ? "returned rows" : "completed, no rows"),
                 margin,
                 70
             );
@@ -2591,6 +3062,102 @@
 
                 cursorY += explLines.length * 13 + 12;
             }
+
+            // Where the rows came from, and what that does not
+            // establish. The exported file is read by people who
+            // never saw this screen, so both halves travel with it:
+            // the source facts, and the fact that nothing checked the
+            // answer against them.
+            if (lastProvenance) {
+
+                if (cursorY > pageHeight - 130) {
+                    doc.addPage();
+                    cursorY = margin + 10;
+                }
+
+                sectionLabel("Source");
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9.5);
+                doc.setTextColor(51, 65, 85);
+
+                const known = value =>
+                    value !== PROVENANCE_UNAVAILABLE
+                        ? value
+                        : null;
+
+                const sourceText = [
+                    `Database: ${sourceName}`,
+                    known(
+                        `SHA-256: ${
+                            provenanceValue(
+                                lastProvenance.source_sha256
+                            )
+                        }`
+                    ),
+                    known(
+                        `Written by: ${
+                            provenanceModel(lastProvenance)
+                        }`
+                    ),
+                    known(
+                        `Executed: ${
+                            provenanceWhen(
+                                lastProvenance.executed_at
+                            )
+                        }`
+                    ),
+                    known(
+                        `Rows: ${
+                            provenanceRows(lastProvenance)
+                        }`
+                    ),
+                    known(
+                        `Request: ${
+                            provenanceValue(
+                                lastProvenance.request_id
+                            )
+                        }`
+                    )
+                ]
+                    .filter(Boolean)
+                    .join("\n");
+
+                const sourceLines =
+                    doc.splitTextToSize(
+                        sourceText,
+                        contentWidth
+                    );
+
+                doc.text(sourceLines, margin, cursorY);
+
+                cursorY += sourceLines.length * 13 + 12;
+            }
+
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(8.5);
+            doc.setTextColor(100, 116, 139);
+
+            const unverifiedNote =
+                doc.splitTextToSize(
+                    (lastVerification &&
+                        typeof lastVerification.note === "string" &&
+                        lastVerification.note.trim())
+                        ? lastVerification.note
+                        : FALLBACK_NOTE,
+                    contentWidth
+                );
+
+            if (cursorY + unverifiedNote.length * 12 > pageHeight - 60) {
+                doc.addPage();
+                cursorY = margin + 10;
+            }
+
+            doc.text(unverifiedNote, margin, cursorY);
+
+            cursorY += unverifiedNote.length * 12 + 12;
+
+            doc.setFont("helvetica", "normal");
 
             // Results table
             if (cursorY > pageHeight - 140) {
@@ -3459,7 +4026,10 @@
                     explanation: lastExplanation || "",
                     data: lastResultData.slice(0, 2000),
                     count: lastCount,
-                    truncated: lastTruncated
+                    truncated: lastTruncated,
+                    source_database: sourceLabel(),
+                    source_sha256: digestLabel(),
+                    model: modelLabel()
                 })
             });
 
