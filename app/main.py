@@ -26,7 +26,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from app import approvals, history, observability, uploads
+from app import access, approvals, history, observability, uploads
+from app.access import FreeTrialExhausted
 from app.auth import (
     configured_secret,
     credentials_match,
@@ -37,10 +38,17 @@ from app.auth import (
     require_auth,
 )
 from app.config import (
+    ABOUT_PATH,
+    ACCESS_REQUEST_RATE_LIMIT_REQUESTS,
+    ACCESS_REQUEST_RATE_LIMIT_WINDOW_SECONDS,
+    ACCESS_SESSION_TTL_SECONDS,
+    ACCESS_UNLOCK_RATE_LIMIT_REQUESTS,
+    ACCESS_UNLOCK_RATE_LIMIT_WINDOW_SECONDS,
     APP_API_KEY,
     ASK_RATE_LIMIT_REQUESTS,
     ASK_RATE_LIMIT_WINDOW_SECONDS,
     AUTH_SESSION_TTL_SECONDS,
+    CONTACT_PATH,
     DATABASE_PATH,
     GEMINI_API_KEY,
     INDEX_PATH,
@@ -50,6 +58,9 @@ from app.config import (
     MAX_PROMPT_CHARS,
     NVIDIA_API_KEY,
     NVIDIA_MODEL,
+    OWNER_CONTACT_EMAIL,
+    PRIVACY_PATH,
+    PUBLIC_DIR,
     UPLOAD_RATE_LIMIT_REQUESTS,
     UPLOAD_RATE_LIMIT_WINDOW_SECONDS,
 )
@@ -69,6 +80,7 @@ from app.ratelimit import (
     REPORT_RATE_LIMIT_REQUESTS,
     REPORT_RATE_LIMIT_WINDOW_SECONDS,
     rate_limit,
+    rate_limit_visitor,
 )
 from app.reports import build_report_pdf
 from app.schema import get_schema
@@ -132,6 +144,14 @@ app.add_middleware(
     observability.RequestContextMiddleware
 )
 
+# Added last, so it is the outermost layer and sees the response that is
+# actually sent - including the ones built by an exception handler,
+# which is the only place a charged free attempt can be written for a
+# request that failed after the provider was called. See app/access.py.
+app.add_middleware(
+    access.TrialCounterMiddleware
+)
+
 
 # FastAPI's default 422 body echoes the submitted input back: the
 # offending field, its value and a Pydantic message. On a login form that
@@ -146,6 +166,38 @@ async def validation_error_handler(
     return JSONResponse(
         status_code=422,
         content=observability.validation_error_payload(
+            observability.request_id_of(request)
+        ),
+    )
+
+
+# The free trial running out is a business answer, not a malfunction:
+# the visitor gets a specific, actionable status that the frontend keys
+# on, plus the reference id every other answer carries. Handled here
+# because the body has to be flat - detail and message side by side - and
+# an HTTPException would bury both inside FastAPI's {"detail": {...}}.
+# The provider is never reached on this path, so nothing is spent.
+@app.exception_handler(FreeTrialExhausted)
+async def free_trial_exhausted_handler(
+    request: Request, exc: FreeTrialExhausted
+):
+    return JSONResponse(
+        status_code=403,
+        content=access.free_trial_payload(
+            observability.request_id_of(request)
+        ),
+    )
+
+
+# A rejected App Access Code is answered the same way: flat, machine
+# readable, and identical whatever the caller got wrong.
+@app.exception_handler(access.InvalidAccessCode)
+async def invalid_access_code_handler(
+    request: Request, exc: access.InvalidAccessCode
+):
+    return JSONResponse(
+        status_code=401,
+        content=access.invalid_code_payload(
             observability.request_id_of(request)
         ),
     )
@@ -169,6 +221,25 @@ api = APIRouter(
     prefix="/api",
     tags=["api"],
     dependencies=[Depends(require_auth)],
+)
+
+# The visitor surface, deliberately on its own router with NO
+# router-level guard, because these three routes are the way a visitor
+# arrives:
+#
+#   GET  /api/public/schema  read-only column metadata, no secrets
+#   POST /api/access/unlock  exchange an App Access Code for a session
+#   POST /api/access/request collect an email to return with a contact
+#
+# Keeping them here rather than on the guarded router is the whole
+# point: the guard cannot be relaxed to let a visitor in, because it is
+# not attached to these routes at all. /api/ask sits here too and is
+# gated per request by require_ask_access, which accepts an admin
+# session, APP_API_KEY, an access cookie or one free attempt - see
+# app/access.py.
+visitor_router = APIRouter(
+    prefix="/api",
+    tags=["api"],
 )
 
 
@@ -219,6 +290,14 @@ class ReportRequest(BaseModel):
 
 class AuthLogin(BaseModel):
     password: str = ""
+
+
+class AccessUnlock(BaseModel):
+    code: str = ""
+
+
+class AccessRequest(BaseModel):
+    email: str = ""
 
 
 # ============================================================
@@ -316,6 +395,125 @@ app.include_router(auth_router)
 
 
 # ============================================================
+# VISITOR ACCESS (PUBLIC BY NECESSITY)
+# ============================================================
+# A visitor with no credential at all still has to be able to reach the
+# application, see the schema and unlock with a code, so these routes
+# are public by construction and live on visitor_router, which carries
+# no guard. Nothing here widens the guarded router.
+#
+# Neither endpoint may be turned into an oracle: /api/access/unlock
+# answers 401 with one fixed wording whatever was wrong, and
+# /api/access/request stores nothing and sends nothing, because this
+# deployment has no mail transport to send with.
+
+_access_unlock_limiter = rate_limit(
+    scope="access-unlock",
+    limit=ACCESS_UNLOCK_RATE_LIMIT_REQUESTS,
+    window_seconds=ACCESS_UNLOCK_RATE_LIMIT_WINDOW_SECONDS,
+    pre_auth=True,
+)
+
+_access_request_limiter = rate_limit(
+    scope="access-request",
+    limit=ACCESS_REQUEST_RATE_LIMIT_REQUESTS,
+    window_seconds=ACCESS_REQUEST_RATE_LIMIT_WINDOW_SECONDS,
+    pre_auth=True,
+)
+
+
+def _looks_like_email(value):
+    """A shape check, not a validation service.
+
+    Enough to catch a typo before the caller is told the request was
+    received. It cannot tell a deliverable address from an undeliverable
+    one, and it is not used to send anything.
+    """
+
+    if not value or len(value) > 254:
+        return False
+
+    local, separator, domain = value.partition("@")
+
+    return bool(
+        separator
+        and local
+        and domain
+        and "." in domain
+        and " " not in value
+        and "\n" not in value
+    )
+
+
+@visitor_router.post("/access/unlock")
+def unlock_access(
+    response: Response,
+    request: Request,
+    payload: Optional[AccessUnlock] = None,
+    _limited: None = Depends(_access_unlock_limiter),
+):
+
+    # 503 when no signing secret is configured: fail closed rather than
+    # issue a cookie nobody can verify.
+    access.signing_secret()
+
+    if not access.access_code_matches(
+        payload.code if payload else ""
+    ):
+
+        raise access.InvalidAccessCode() from None
+
+    access.set_access_cookie(response)
+
+    # The counter is meaningless once the code is known, so it is
+    # dropped rather than left to expire on its own.
+    access.clear_trial_cookie(response)
+
+    # The code itself is never echoed, and neither is anything derived
+    # from it: the response is a flag and a lifetime.
+    return {
+        "unlocked": True,
+        "expires_in": int(ACCESS_SESSION_TTL_SECONDS),
+    }
+
+
+@visitor_router.post("/access/request")
+def request_access(
+    payload: AccessRequest,
+    _limited: None = Depends(_access_request_limiter),
+):
+
+    # Bounded, and never reflected back: the 422 handler already refuses
+    # to echo submitted input, and this message carries no value.
+    if not _looks_like_email(payload.email.strip()):
+
+        raise HTTPException(
+            status_code=400,
+            detail="Enter a valid email address.",
+        )
+
+    # Honest about what happened. The address is accepted, validated and
+    # discarded: there is no mail transport in this deployment, and no
+    # durable store to write it to. Saying "request sent" would be a
+    # lie the visitor acts on. When the operator configures a contact
+    # address, that is what the visitor is told to use instead.
+    return {
+        "accepted": True,
+        "notification_sent": False,
+        "owner_contact": OWNER_CONTACT_EMAIL or None,
+        "detail": (
+            "No email was sent: this deployment has no mail "
+            "transport. Contact the owner directly to request "
+            "an App Access Code."
+        ),
+    }
+
+
+# The visitor router is mounted at the very end of this module, next to
+# the guarded one, so it carries every visitor route defined here.
+
+
+# ============================================================
 # HOME (PUBLIC)
 # ============================================================
 
@@ -324,6 +522,57 @@ def home():
 
     return FileResponse(
         INDEX_PATH
+    )
+
+
+# ============================================================
+# INFORMATION PAGES (PUBLIC)
+# ============================================================
+# About, Contact and Privacy are static documents shipped with the
+# deployment, exactly like index.html. They are public on purpose:
+# they explain the product and how it handles data, and they contain
+# no application state, no configuration and no secret. Each is a
+# self-contained HTML file served read-only, so adding them cannot
+# change any existing route, guard or API behaviour.
+
+@app.get("/about")
+def about():
+
+    return FileResponse(
+        ABOUT_PATH
+    )
+
+
+@app.get("/contact")
+def contact():
+
+    return FileResponse(
+        CONTACT_PATH
+    )
+
+
+@app.get("/privacy")
+def privacy():
+
+    return FileResponse(
+        PRIVACY_PATH
+    )
+
+
+# ============================================================
+# BRAND ASSETS (PUBLIC)
+# ============================================================
+# The pages reference the logo at /tiix-logo-symbol.png. On the
+# deployment platform that URL is served from public/ at the site
+# root; this route serves the identical existing file locally so the
+# reference resolves in both environments. It returns an existing
+# read-only image and changes no application behaviour.
+
+@app.get("/tiix-logo-symbol.png")
+def logo_symbol():
+
+    return FileResponse(
+        os.path.join(PUBLIC_DIR, "tiix-logo-symbol.png")
     )
 
 
@@ -347,6 +596,31 @@ def health():
 # ============================================================
 # VERSION / SCHEMA (PROTECTED: attached to the guarded router)
 # ============================================================
+
+def _schema_payload(request):
+    """The read-only schema body, shared by both schema routes.
+
+    get_schema() returns table, column and foreign-key metadata only:
+    names and types, never a row, a value, a path or a credential. That
+    is what makes the /api/public/schema copy below safe to serve to a
+    visitor - the frontend cannot build a prompt without it, so serving
+    it is what removes the sign-in from the first page load.
+    """
+
+    try:
+
+        return {
+            "schema": get_schema()
+        }
+
+    except Exception as exc:
+
+        # A sqlite3 message names the database file and the failing
+        # query, so it is never returned verbatim.
+        raise observability.sanitized_http_exception(
+            exc, request
+        ) from None
+
 
 @api.get("/version")
 def version():
@@ -373,29 +647,34 @@ def version():
 @api.get("/schema")
 def schema(request: Request):
 
-    try:
+    return _schema_payload(request)
 
-        return {
-            "schema": get_schema()
-        }
 
-    except Exception as exc:
+# The same body, without the guard. Kept as a separate path rather than
+# by relaxing /api/schema, because /api/schema is part of the documented
+# security contract: it stays behind APP_API_KEY, and every existing
+# caller of it is unaffected. The frontend uses this copy.
+@visitor_router.get("/public/schema")
+def public_schema(request: Request):
 
-        # A sqlite3 message names the database file and the failing
-        # query, so it is never returned verbatim.
-        raise observability.sanitized_http_exception(
-            exc, request
-        ) from None
+    return _schema_payload(request)
 
 
 # ============================================================
-# MAIN AI ENDPOINT (PROTECTED)
+# MAIN AI ENDPOINT (OWNER SESSION, APP API KEY, ACCESS CODE,
+# OR A FREE ATTEMPT)
 # ============================================================
 # The costliest route in the application, and the only one that calls
-# a provider. Two independent controls sit in front of it, and their
-# order is deliberate:
+# a provider. The controls in front of it, and their order, are
+# deliberate:
 #
-#   Authentication -> Rate limiting -> Concurrency cap -> Provider
+#   Access -> Rate limiting -> Validation -> Concurrency -> Provider
+#
+# Access is require_ask_access (app/access.py): the admin session, then
+# APP_API_KEY, then an access cookie, then one free attempt, and a 403
+# for a visitor who has spent them. It runs first and costs nothing, so
+# an exhausted visitor never reaches the limiter, the provider or the
+# budget behind either.
 #
 # The rate limiter is per caller over time, so it is the right place
 # to stop one client spending the allowance of another. The cap in
@@ -405,7 +684,9 @@ def schema(request: Request):
 # told so without any provider capacity being consulted at all.
 #
 # The two controls are not substitutes: neither bounds the other, and
-# only the edge layer in front of the function is global.
+# only the edge layer in front of the function is global. Neither is a
+# substitute for the trial counter either - the counter bounds a
+# visitor over days, the limiter bounds a client over seconds.
 
 # Answered when the instance is at its concurrency cap. Says nothing
 # about the cap, the in-flight count, the configuration or the
@@ -416,11 +697,11 @@ _CONCURRENCY_DETAIL = (
     "Please wait a moment and try again."
 )
 
-@api.post(
+@visitor_router.post(
     "/ask",
     dependencies=[
         Depends(
-            rate_limit(
+            rate_limit_visitor(
                 scope="ask",
                 limit=ASK_RATE_LIMIT_REQUESTS,
                 window_seconds=ASK_RATE_LIMIT_WINDOW_SECONDS,
@@ -475,6 +756,17 @@ def ask_ai(payload: QueryRequest, request: Request):
         # Filled in by whichever provider answers, so provenance can
         # name the real one instead of the configured one.
         generation = GenerationRef()
+
+        # The one place an attempt is charged. Everything above was
+        # free: an empty prompt, an over-long prompt or an unknown
+        # session returns before this line. It is deliberately AFTER the
+        # checks and immediately BEFORE the provider call, so what is
+        # counted is what was actually sent upstream - and it holds even
+        # if the provider then fails, because that call was still paid
+        # for. The counter is published on the request and written by
+        # TrialCounterMiddleware, so a 429 or a 500 cannot silently drop
+        # the charge.
+        access.charge_trial_attempt(request)
 
         generated_sql, explanation = ask_active(
             prompt,
@@ -881,10 +1173,12 @@ def generate_report(
     )
 
 
-# The guarded router is mounted only after every protected handler is
-# registered, so each one inherits the single require_auth dependency
-# and none of them can run before the guard.
+# Both routers are mounted only after every handler is registered, so
+# each route inherits its router's own dependencies and none of them
+# can run before them. The guarded router is included first purely to
+# keep the two visually adjacent; the two prefixes do not overlap.
 app.include_router(api)
+app.include_router(visitor_router)
 
 
 # ============================================================

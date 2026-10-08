@@ -768,14 +768,56 @@ def test_the_rejection_is_logged_with_the_request_id(
 
 
 # ============================================================
-# 18. AUTH -> RATE LIMIT -> CONCURRENCY CAP -> PROVIDER
+# 18. ACCESS -> RATE LIMIT -> CONCURRENCY CAP -> PROVIDER
 # ============================================================
 
-def test_authentication_still_comes_first(
+def test_an_exhausted_visitor_never_reaches_the_cap(
     anon_client, nvidia_stub, monkeypatch, caplog
 ):
-    """An unauthenticated caller is rejected by auth, so it never
-    reaches the cap and never produces a saturation record."""
+    """The free-attempt gate runs before everything expensive.
+
+    /api/ask is reachable without a credential now, so "rejected
+    before the cap" is proved the only way it can be: by spending the
+    free allowance first. The exhausted request must never reach the
+    concurrency cap, so no saturation record is produced and no
+    Retry-After is invented for a refusal the visitor caused.
+    """
+
+    monkeypatch.setattr(gate, "try_acquire", lambda: False)
+
+    for _ in range(config.TRIAL_MAX_ATTEMPTS):
+        assert anon_client.post(
+            "/api/ask", json={"prompt": "show products"}
+        ).status_code == 429
+
+    with caplog.at_level(
+        logging.INFO, logger="app.llm_concurrency"
+    ):
+        # The five attempts above were charged even though the provider
+        # was never reached, so the sixth is refused for running out of
+        # attempts rather than for running into the cap. Clearing first
+        # makes the assertion below about the refusal alone.
+        caplog.clear()
+
+        response = anon_client.post(
+            "/api/ask", json={"prompt": "show products"}
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "FREE_TRIAL_EXHAUSTED"
+    assert "Retry-After" not in response.headers
+    assert _saturation_records(caplog.records) == []
+
+
+def test_a_trial_visitor_is_still_capped(
+    anon_client, nvidia_stub, monkeypatch, caplog
+):
+    """Spending a free attempt does not buy an uncapped one.
+
+    The gate is refused from the very first request, so a visitor with
+    no credential gets exactly the same saturation answer an owner
+    would - the access model widened the door, not the concurrency cap.
+    """
 
     monkeypatch.setattr(gate, "try_acquire", lambda: False)
 
@@ -786,9 +828,9 @@ def test_authentication_still_comes_first(
             "/api/ask", json={"prompt": "show products"}
         )
 
-    assert response.status_code == 401
-    assert "Retry-After" not in response.headers
-    assert _saturation_records(caplog.records) == []
+    assert response.status_code == 429
+    assert "Retry-After" in response.headers
+    assert _saturation_records(caplog.records)
 
 
 def test_the_rate_limiter_answers_before_the_cap_is_consulted(

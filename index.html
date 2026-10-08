@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TIIX SQL Studio — Natural Language to SQL</title>
+    <title>TIIX SQL Studio â€” Natural Language to SQL</title>
     <meta name="description" content="TIIX SQL Studio: turn plain English into read-only SQLite queries, inspect the SQL, see where every result came from, and explore results with automatic visualizations.">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -175,7 +175,9 @@
             width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; color: #06222a; flex-shrink: 0;
             background: linear-gradient(140deg, #b6ebe6, #56b6bf 54%, #2b7280);
             box-shadow: 0 0 26px rgba(78, 162, 174, .42), inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(6, 34, 42, .35);
+            overflow: hidden;
         }
+        .brand-mark img { width: 34px; height: 34px; object-fit: contain; display: block; }
         .brand-name { font-size: 14.5px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
         .studio-badge {
             font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
@@ -208,11 +210,12 @@
         .icon-btn:hover { color: var(--accent-2); border-color: var(--border-hover); background: var(--wash); transform: translateY(-1px); }
         .avatar {
             width: 38px; height: 38px; border-radius: var(--radius-sm); display: grid; place-items: center;
-            font-size: 12px; font-weight: 800; letter-spacing: .04em; color: #06222a;
+            overflow: hidden;
             background: linear-gradient(140deg, #b6ebe6, #56b6bf);
             border: 1px solid rgba(166, 228, 223, .30);
             box-shadow: inset 0 1px 0 rgba(255,255,255,.45);
         }
+        .avatar img { width: 30px; height: 30px; object-fit: contain; display: block; }
 
         /* ---------- Workspace ---------- */
         .workspace { display: grid; grid-template-columns: 292px minmax(0, 1fr); gap: 18px; margin-top: 18px; align-items: start; }
@@ -277,7 +280,7 @@
         .clear-btn:hover { color: var(--danger); border-color: rgba(251, 113, 133, .34); background: rgba(251, 113, 133, .08); }
 
         /* ---------- Hero ---------- */
-        .hero { position: relative; overflow: hidden; padding: 30px 28px 24px; border-radius: 20px; }
+        .hero { position: relative; overflow: hidden; padding: 30px 28px 24px; border-radius: 20px; margin-top: 18px; }
         .hero::before { content: ""; position: absolute; width: 420px; height: 420px; right: -160px; top: -200px; background: radial-gradient(circle, rgba(78, 162, 174, .26), transparent 68%); pointer-events: none; }
         .hero::after { content: ""; position: absolute; width: 220px; height: 220px; left: -110px; bottom: -140px; background: radial-gradient(circle, rgba(166, 228, 223, .12), transparent 68%); pointer-events: none; }
         .hero-top { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
@@ -401,8 +404,11 @@
         .command-key { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; }
         .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; padding: 11px 15px; border-radius: var(--radius-sm); color: #edf1f6; background: var(--panel-strong); border: 1px solid var(--border-hover); box-shadow: var(--shadow-sm), 0 0 30px -14px rgba(111, 177, 203, .6); font-family: "JetBrains Mono", monospace; font-size: 11px; pointer-events: none; transition: .25s var(--ease); z-index: 150; }
         .toast.show { opacity: 1; transform: translate(-50%, 0); }
-        .footer-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 4px 2px; color: var(--muted-2); font-size: 10px; }
+        .footer-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 4px 2px; color: var(--muted-2); font-size: 10px; }
         .footer-brand { color: var(--muted); font-weight: 800; letter-spacing: .1em; }
+        .footer-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; }
+        .footer-nav a { color: var(--muted); text-decoration: none; font-size: 10.5px; font-weight: 600; transition: .16s var(--ease); }
+        .footer-nav a:hover, .footer-nav a:focus-visible { color: var(--accent-2); }
         .keyboard-key { display: inline-flex; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--inset); font-family: "JetBrains Mono", monospace; font-size: 9px; }
 
         .fade-in { animation: fadeIn .45s var(--ease) both; }
@@ -506,14 +512,90 @@
             transition: .2s var(--ease);
         }
         .auth-submit:hover { transform: translateY(-1px); filter: brightness(1.06); }
+
+        /* ---------- Access code modal ---------- */
+        /* Shown only when /api/ask reports that the free attempts are
+           used. It is never opened on page load: an arriving visitor
+           sees the whole workspace first and the modal only if the
+           server refuses a question. Same backdrop and card as the
+           sign-in gate, so it reads as the same dialog family. */
+        .access-gate { display: none; }
+        .access-gate.open { display: flex; }
+        .access-title { font-size: 15px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+        .access-note { margin: 8px 0 18px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+        .access-label { display: block; margin: 14px 0 6px; color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; text-align: left; }
+        .access-contact { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted-2); font-size: 11px; line-height: 1.65; text-align: left; }
+        .access-contact strong { color: var(--text-soft); font-weight: 600; }
+        .access-status { display: none; margin-top: 12px; color: var(--accent-ink); font-size: 11px; line-height: 1.6; text-align: left; }
+        .access-status.show { display: block; }
+        .access-status.bad { color: var(--danger); }
+        .access-secondary { width: 100%; margin-top: 10px; cursor: pointer; color: var(--text-soft); background: var(--inset); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; transition: .2s var(--ease); }
+        .access-secondary:hover { border-color: var(--border-hover); background: var(--wash); }
+        .access-secondary:disabled { opacity: .55; cursor: default; }
+        .access-dismiss { display: block; width: 100%; margin-top: 16px; cursor: pointer; color: var(--muted-2); background: none; border: none; font-size: 11px; }
+        .access-dismiss:hover { color: var(--text-soft); }
     </style>
 </head>
 
 <body>
 
+<!-- Access code modal. Hidden until /api/ask answers 403 FREE_TRIAL_EXHAUSTED,
+     so a visitor sees the workspace immediately and is only interrupted when
+     a question is actually refused. The App Access Code is read from the field
+     and posted to /api/access/unlock; it is never stored, never written to
+     localStorage, and the server answers with an HttpOnly cookie instead. -->
+<div class="auth-backdrop access-gate" id="accessGate">
+    <div class="auth-card">
+        <div class="access-title">Access code required</div>
+        <p class="access-note" id="accessMessage">
+            Your free attempts have been used. Enter an App Access
+            Code to keep asking questions.
+        </p>
+
+        <label class="access-label" for="accessCodeInput">App access code</label>
+        <input
+            class="auth-field"
+            id="accessCodeInput"
+            type="text"
+            placeholder="Access code"
+            autocomplete="off"
+            spellcheck="false"
+        >
+        <button class="auth-submit" type="button" onclick="unlockWithCode()">Unlock</button>
+
+        <label class="access-label" for="accessEmailInput">No code yet?</label>
+        <input
+            class="auth-field"
+            id="accessEmailInput"
+            type="email"
+            placeholder="you@example.com"
+            autocomplete="email"
+            spellcheck="false"
+        >
+        <button
+            class="access-secondary"
+            id="accessRequestBtn"
+            type="button"
+            onclick="requestAccessCode()"
+        >
+            Send a request
+        </button>
+
+        <div class="access-status" id="accessStatus"></div>
+        <div class="access-contact" id="accessContact" hidden></div>
+
+        <button class="access-dismiss" type="button" onclick="closeAccessModal()">
+            Not now
+        </button>
+    </div>
+</div>
+
 <!-- Sign-in gate. Hidden until a protected API call answers 401. The
      form posts natively to /api/auth/login-form, so the secret is
-     submitted by the browser and never enters JavaScript. -->
+     submitted by the browser and never enters JavaScript. This is the
+     OWNER surface only: sessions, uploads, approvals and reports stay
+     behind the application access key. A visitor with no credential
+     never reaches it, because nothing they can click is guarded. -->
 <div class="auth-backdrop auth-gate" id="authGate">
     <form class="auth-card" method="post" action="/api/auth/login-form">
         <div class="auth-title">Sign in</div>
@@ -538,9 +620,7 @@
     <header class="topbar glass">
         <div class="brand">
             <div class="brand-mark">
-                <svg width="21" height="21" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4-3.58 4-8 4-8-1.79-8-4Zm0 0v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7m-16 5c0 2.21 3.58 4 8 4s8-1.79 8-4" />
-                </svg>
+                <img src="/tiix-logo-symbol.png" alt="">
             </div>
             <div>
                 <div class="brand-name">TIIX SQL <span class="studio-badge">Studio</span></div>
@@ -549,18 +629,18 @@
         </div>
 
         <div class="top-actions">
-            <button class="palette-trigger" onclick="openCommandPalette()" title="Command palette — Ctrl + K">
+            <button class="palette-trigger" onclick="openCommandPalette()" title="Command palette â€” Ctrl + K">
                 <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
-                <span>Search actions…</span>
+                <span>Search actionsâ€¦</span>
                 <span class="keyboard-key">Ctrl K</span>
             </button>
             <div class="engine-pill"><span class="engine-dot"></span>SQLite Engine Active</div>
-            <button id="themeToggle" class="icon-btn" onclick="toggleTheme()" title="Toggle theme — Ctrl + Shift + L" aria-label="Toggle theme">
+            <button id="themeToggle" class="icon-btn" onclick="toggleTheme()" title="Toggle theme â€” Ctrl + Shift + L" aria-label="Toggle theme">
                 <svg id="themeIcon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
                 </svg>
             </button>
-            <button class="icon-btn" onclick="openCommandPalette()" title="Command palette — Ctrl + K" aria-label="Open command palette">
+            <button class="icon-btn" onclick="openCommandPalette()" title="Command palette â€” Ctrl + K" aria-label="Open command palette">
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
             </button>
             <button id="signOutBtn" class="icon-btn" onclick="signOut()" title="Sign out" aria-label="Sign out">
@@ -568,16 +648,32 @@
                     <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M15 17l5-5-5-5m5 5H9m3 8H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" />
                 </svg>
             </button>
-            <div class="avatar" title="Local workspace">TX</div>
+            <div class="avatar" title="TIIX SQL Studio"><img src="/tiix-logo-symbol.png" alt="TIIX"></div>
         </div>
     </header>
+
+    <section class="hero glass fade-in">
+        <div class="hero-top">
+            <div>
+                <div class="eyebrow"><i></i>AI Database Workspace</div>
+                <h1>Ask your database.<br><span class="gradient-text">Get readable SQL.</span></h1>
+                <p class="hero-description">Describe what you need in plain English. TIIX generates read-only SQLite, shows you exactly what it ran and where the rows came from, explains each query, and renders results plus automatic visualizations.</p>
+            </div>
+            <div class="mode-badge"><span></span>TIIX AI Mode</div>
+        </div>
+        <div class="hero-stats">
+            <span class="stat-chip"><b>Live schema</b><span class="mono">/api/public/schema</span></span>
+            <span class="stat-chip"><b>Conversational</b><span class="mono">10-turn memory</span></span>
+            <span class="stat-chip"><b>Read-only enforced</b><span class="mono">SELECT-only</span></span>
+        </div>
+    </section>
 
     <div class="workspace">
 
         <aside class="sidebar glass">
             <div class="sidebar-heading">
                 <span class="section-label">Database Explorer</span>
-                <span class="mini-badge">SQLite · Live</span>
+                <span class="mini-badge">SQLite Â· Live</span>
             </div>
 
             <div class="db-card">
@@ -587,7 +683,7 @@
                     </div>
                     Local Database
                 </div>
-                <div class="db-meta mono">store.db<br>live schema via /api/schema · relational</div>
+                <div class="db-meta mono">store.db<br>live schema via /api/public/schema Â· relational</div>
             </div>
 
             <div class="sidebar-heading">
@@ -617,22 +713,6 @@
 
         <main class="main">
 
-            <section class="hero glass fade-in">
-                <div class="hero-top">
-                    <div>
-                        <div class="eyebrow"><i></i>AI Database Workspace</div>
-                        <h1>Ask your database.<br><span class="gradient-text">Get readable SQL.</span></h1>
-                        <p class="hero-description">Describe what you need in plain English. TIIX generates read-only SQLite, shows you exactly what it ran and where the rows came from, explains each query, and renders results plus automatic visualizations.</p>
-                    </div>
-                    <div class="mode-badge"><span></span>TIIX AI Mode</div>
-                </div>
-                <div class="hero-stats">
-                    <span class="stat-chip"><b>Live schema</b><span class="mono">/api/schema</span></span>
-                    <span class="stat-chip"><b>Conversational</b><span class="mono">10-turn memory</span></span>
-                    <span class="stat-chip"><b>Read-only enforced</b><span class="mono">SELECT-only</span></span>
-                </div>
-            </section>
-
             <div class="workspace-bar fade-in">
                 <div class="ws-session">
                     <span class="ws-dot"></span>
@@ -657,9 +737,9 @@
 
                 <div class="input-wrap">
                     <label class="sr-only" for="promptInput">Natural language query</label>
-                    <textarea id="promptInput" rows="4" placeholder="Ask something like: Show me Nike products...">Show me Nike products</textarea>
+                    <textarea id="promptInput" rows="4" placeholder="Ask anything about your business data..."></textarea>
                     <div class="input-footer">
-                        <div class="input-hint">Plain English → SQL → Results</div>
+                        <div class="input-hint">Plain English â†’ SQL â†’ Results</div>
                         <div class="ai-indicator"><span class="ai-indicator-dot"></span>AI READY</div>
                     </div>
                 </div>
@@ -673,7 +753,7 @@
                 </div>
 
                 <div class="run-row">
-                    <div class="run-hint">Follow-ups reuse context — try “them”, “same brand”, “break that down”.</div>
+                    <div class="run-hint">Follow-ups reuse context â€” try â€œthemâ€, â€œsame brandâ€, â€œbreak that downâ€.</div>
                     <button id="runButton" onclick="sendQuery()">
                         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7"/></svg>
                         <span id="runButtonLabel">Generate SQL &amp; Run</span>
@@ -685,7 +765,7 @@
                 <div class="panel-header">
                     <div>
                         <div class="panel-title">Generated SQLite Query</div>
-                        <div class="panel-sub">Read it before you rely on it — copy or clear anytime.</div>
+                        <div class="panel-sub">Read it before you rely on it â€” copy or clear anytime.</div>
                     </div>
                     <span id="sqlStatus" class="status">Ready</span>
                 </div>
@@ -714,7 +794,7 @@
                 <div class="panel-header">
                     <div>
                         <div class="panel-title">Query Execution Results</div>
-                        <div class="panel-sub">Live output from the SQLite engine — these are the rows the query returned, not a confirmed answer</div>
+                        <div class="panel-sub">Live output from the SQLite engine â€” these are the rows the query returned, not a confirmed answer</div>
                     </div>
                     <div class="result-metrics">
                         <span id="resultMetric" class="metric">0 rows</span>
@@ -729,7 +809,7 @@
                             <div class="empty-state-icon">
                                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4-3.58 4-8 4-8-1.79-8-4Zm0 0v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7"/></svg>
                             </div>
-                            Click “Generate SQL &amp; Run” to execute a query.
+                            Click â€œGenerate SQL &amp; Runâ€ to execute a query.
                         </div>
                     </div>
                 </div>
@@ -748,13 +828,13 @@
                         <span id="verificationBadge" class="provenance-badge">Not verified</span>
                     </div>
                     <dl class="provenance-grid">
-                        <div><dt>Source</dt><dd id="provSource">—</dd></div>
-                        <div><dt>Fingerprint</dt><dd id="provDigest" class="mono">—</dd></div>
-                        <div><dt>Written by</dt><dd id="provModel">—</dd></div>
-                        <div><dt>Executed</dt><dd id="provExecuted">—</dd></div>
-                        <div><dt>Duration</dt><dd id="provElapsed">—</dd></div>
-                        <div><dt>Rows</dt><dd id="provRows">—</dd></div>
-                        <div><dt>Request</dt><dd id="provRequestId" class="mono">—</dd></div>
+                        <div><dt>Source</dt><dd id="provSource">â€”</dd></div>
+                        <div><dt>Fingerprint</dt><dd id="provDigest" class="mono">â€”</dd></div>
+                        <div><dt>Written by</dt><dd id="provModel">â€”</dd></div>
+                        <div><dt>Executed</dt><dd id="provExecuted">â€”</dd></div>
+                        <div><dt>Duration</dt><dd id="provElapsed">â€”</dd></div>
+                        <div><dt>Rows</dt><dd id="provRows">â€”</dd></div>
+                        <div><dt>Request</dt><dd id="provRequestId" class="mono">â€”</dd></div>
                     </dl>
                     <p id="provenanceNote" class="provenance-note"></p>
                 </div>
@@ -762,6 +842,11 @@
 
             <footer class="footer-bar">
                 <div><span class="footer-brand">TIIX SQL STUDIO</span><span class="ml-2">AI-powered database exploration</span></div>
+                <nav class="footer-nav" aria-label="Information">
+                    <a href="/about">About</a>
+                    <a href="/contact">Contact</a>
+                    <a href="/privacy">Privacy</a>
+                </nav>
                 <div>Command palette <span class="keyboard-key">Ctrl</span> + <span class="keyboard-key">K</span></div>
             </footer>
         </main>
@@ -813,7 +898,7 @@
             <button class="export-btn mt-4" onclick="handleUpload()">Import file</button>
             <p class="ws-hint">Accepted: .db / .sqlite / .sqlite3 / .sql / .xlsx<br>
                 Files are copied into an isolated sandbox. SQL scripts run only inside a
-                brand-new throwaway database — they can never touch store.db.</p>
+                brand-new throwaway database â€” they can never touch store.db.</p>
         </div>
         <div id="uploadResult" class="workspace-section"></div>
         <div class="workspace-section">
@@ -841,14 +926,298 @@
     /* =====================================================
        AUTHENTICATION HANDSHAKE
     =====================================================
-       The session lives entirely in an HttpOnly cookie that the
-       browser attaches to every same-origin request on its own.
-       This code never holds a credential: it only reveals the
-       sign-in form when the server refuses a call with 401, and
-       posts nothing. The credential is typed into the native
-       form in the markup, which the browser submits directly to
-       /api/auth/login-form; no script reads or sends it.
+       Two separate doors, and the difference matters.
+
+       VISITOR (this modal): the App Access Code is typed here,
+       posted to /api/access/unlock, and never kept. The server
+       answers with an HttpOnly cookie that JavaScript cannot
+       read, so nothing is stored client side at all. It opens
+       only when /api/ask reports that the free attempts are
+       used - never on page load.
+
+       OWNER (the sign-in gate below): the application access key
+       still guards sessions, uploads, approvals and reports. It is
+       typed into a NATIVE form in the markup and submitted by the
+       browser straight to /api/auth/login-form; no script reads
+       it or posts it. A visitor never sees this, because nothing
+       reachable without a credential is behind it.
     ===================================================== */
+
+    /* The backend's own machine-readable code. Keyed on, never on
+       the wording of the message. */
+    const FREE_TRIAL_EXHAUSTED = "FREE_TRIAL_EXHAUSTED";
+
+
+    function showAccessModal(payload) {
+
+        const gate =
+            document.getElementById("accessGate");
+
+        if (gate) {
+            gate.classList.add("open");
+        }
+
+        const message =
+            document.getElementById("accessMessage");
+
+        if (message && payload && payload.message) {
+            message.textContent = payload.message;
+        }
+
+        /* The contact address is operator configuration, not part
+           of the code, so it is read from the server's answer and
+           hidden entirely when it was not set. */
+        const contact =
+            document.getElementById("accessContact");
+
+        if (contact) {
+
+            contact.hidden = true;
+            contact.textContent = "";
+
+            if (payload && payload.owner_contact) {
+                contact.hidden = false;
+                contact.textContent = "Owner contact: ";
+                contact.appendChild(
+                    document.createTextNode(
+                        payload.owner_contact
+                    )
+                );
+            }
+
+        }
+
+        clearAccessStatus();
+
+        const input =
+            document.getElementById("accessCodeInput");
+
+        if (input) {
+            input.value = "";
+            input.focus();
+        }
+
+    }
+
+
+    function closeAccessModal() {
+
+        const gate =
+            document.getElementById("accessGate");
+
+        if (gate) {
+            gate.classList.remove("open");
+        }
+
+        /* The code is not kept anywhere: not in the field, not in a
+           variable that outlives this call, not in storage. */
+        const input =
+            document.getElementById("accessCodeInput");
+
+        if (input) {
+            input.value = "";
+        }
+
+    }
+
+
+    function setAccessStatus(text, bad) {
+
+        const status =
+            document.getElementById("accessStatus");
+
+        if (!status) {
+            return;
+        }
+
+        status.textContent = text || "";
+        status.classList.toggle("show", Boolean(text));
+        status.classList.toggle("bad", Boolean(bad));
+
+    }
+
+
+    function clearAccessStatus() {
+
+        setAccessStatus("", false);
+
+    }
+
+
+    async function unlockWithCode() {
+
+        const input =
+            document.getElementById("accessCodeInput");
+
+        const code =
+            input ? input.value.trim() : "";
+
+        if (!code) {
+            setAccessStatus(
+                "Enter your App Access Code first.",
+                true
+            );
+            return;
+        }
+
+        try {
+
+            const response = await fetch(
+                "/api/access/unlock",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({ code })
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+
+                /* The server says nothing about why, and neither
+                   does this: the code is cleared either way so a
+                   failed guess is not left on screen. */
+                if (input) {
+                    input.value = "";
+                }
+
+                setAccessStatus(
+                    result.detail ||
+                    "That code was not accepted.",
+                    true
+                );
+
+                return;
+
+            }
+
+            closeAccessModal();
+
+            showToast(
+                "Access unlocked. Keep asking."
+            );
+
+        } catch (error) {
+
+            setAccessStatus(
+                "Could not reach the server.",
+                true
+            );
+
+        }
+
+    }
+
+
+    async function requestAccessCode() {
+
+        const input =
+            document.getElementById("accessEmailInput");
+
+        const email =
+            input ? input.value.trim() : "";
+
+        const button =
+            document.getElementById("accessRequestBtn");
+
+        if (!email) {
+            setAccessStatus(
+                "Enter your email address first.",
+                true
+            );
+            return;
+        }
+
+        if (button) {
+            button.disabled = true;
+        }
+
+        try {
+
+            const response = await fetch(
+                "/api/access/request",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({ email })
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+
+                setAccessStatus(
+                    result.detail ||
+                    "That request was not accepted.",
+                    true
+                );
+
+                return;
+
+            }
+
+            if (input) {
+                input.value = "";
+            }
+
+            /* Honest about what the server actually did. This
+               deployment has no mail transport, so it must not
+               claim anything was sent. */
+            setAccessStatus(
+                result.detail ||
+                "No email was sent."
+            );
+
+            const contact =
+                document.getElementById(
+                    "accessContact"
+                );
+
+            if (
+                contact &&
+                result.owner_contact &&
+                contact.hidden
+            ) {
+
+                contact.hidden = false;
+                contact.textContent = "Owner contact: ";
+                contact.appendChild(
+                    document.createTextNode(
+                        result.owner_contact
+                    )
+                );
+
+            }
+
+        } catch (error) {
+
+            setAccessStatus(
+                "Could not reach the server.",
+                true
+            );
+
+        } finally {
+
+            if (button) {
+                button.disabled = false;
+            }
+
+        }
+
+    }
+
 
         function showSignIn() {
 
@@ -863,8 +1232,10 @@
 
         function signOut() {
 
-            /* Server clears the HttpOnly cookie. The client never
-               touches cookie storage. */
+            /* Drops the OWNER session only: the server clears the
+               HttpOnly application-access-key cookie. The client
+               never touches cookie storage. A visitor's own App
+               Access Code session is independent of it. */
             fetch("/api/auth/logout", {
                 method: "POST"
             }).then(function () {
@@ -877,7 +1248,18 @@
 
         /* Returns true when the response was an authentication
            failure, so the caller can stop early instead of
-           rendering a confusing error. */
+           rendering a confusing error.
+
+           OWNER SURFACE ONLY. Every caller is an endpoint guarded
+           by require_auth: sessions, uploads, approvals and reports.
+           It is never called from /api/ask, from the public schema
+           load or from the access modal, because those are the
+           visitor's paths and they have no owner credential to
+           offer - a visitor must never be shown a dialog asking for
+           the application access key. It also cannot become the
+           first thing an arriving visitor sees: the gate is
+           display:none until this function adds "open" to it, and
+           nothing runs on page load. */
         function handleAuthFailure(response) {
 
             if (response.status === 401) {
@@ -1197,7 +1579,7 @@
                                 .map(column => `
                                     <div>
                                         <span class="column-key">${escapeHtml(column.name)}</span>
-                                        ${column.type ? `· ${escapeHtml(column.type)}` : ""}
+                                        ${column.type ? `Â· ${escapeHtml(column.type)}` : ""}
                                     </div>
                                 `)
                                 .join("")
@@ -1254,12 +1636,14 @@
 
         try {
 
+            /* The public copy of the schema route. Read-only table,
+               column and foreign-key metadata, served without a
+               credential so the workspace renders on first load
+               instead of bouncing a visitor into a sign-in. The
+               guarded /api/schema is unchanged and still used by
+               scripts that hold the application access key. */
             const response =
-                await fetch("/api/schema");
-
-            if (handleAuthFailure(response)) {
-                return;
-            }
+                await fetch("/api/public/schema");
 
             if (!response.ok) {
                 throw new Error(
@@ -1290,7 +1674,7 @@
                             class="history-use"
                             onclick="loadLiveSchema()"
                         >
-                            ↻ RETRY
+                            â†» RETRY
                         </button>
                     </div>
                 `;
@@ -1396,7 +1780,7 @@
                                 class="history-use"
                                 onclick="useHistoryQuery(${index})"
                             >
-                                ↻ USE QUERY
+                                â†» USE QUERY
                             </button>
 
                         </div>
@@ -1737,13 +2121,34 @@
                     }
                 );
 
-            if (handleAuthFailure(response)) {
-                return;
-            }
-
-
             const result =
                 await response.json();
+
+
+            /* The free attempts are spent. This is the one refusal
+               the visitor can do something about, so it opens the
+               access modal instead of an error, and the server's own
+               message and contact address are shown rather than
+               anything invented here.
+
+               Keyed on the machine-readable detail, never on the
+               wording. And handleAuthFailure is deliberately NOT
+               called anywhere in this function: it opens the owner
+               sign-in gate, and /api/ask is the VISITOR route - it
+               has no owner-auth failure for that gate to be right
+               about. Wiring it in here would let a question a
+               visitor asked raise a dialog asking for the application
+               access key, which is the exact confusion the access
+               modal replaces. */
+            if (
+                response.status === 403 &&
+                result.detail === FREE_TRIAL_EXHAUSTED
+            ) {
+
+                showAccessModal(result);
+                return;
+
+            }
 
 
             if (!response.ok) {
@@ -2421,7 +2826,7 @@
 
 
 /* =====================================================
-       PROVENANCE — WHERE THE ROWS CAME FROM
+       PROVENANCE â€” WHERE THE ROWS CAME FROM
        ===================================================== */
 
     // Shown instead of a value the server could not establish. A
@@ -2922,7 +3327,7 @@
         if (!window.jspdf) {
 
             showToast(
-                "PDF library not loaded — check connection and retry"
+                "PDF library not loaded â€” check connection and retry"
             );
 
             return;
@@ -2994,7 +3399,7 @@
                     doc.setTextColor(148, 163, 184);
 
                     doc.text(
-                        `TIIX SQL Studio · ${sourceName} · not verified`,
+                        `TIIX SQL Studio Â· ${sourceName} Â· not verified`,
                         margin,
                         pageHeight - 22
                     );
@@ -3016,7 +3421,7 @@
             doc.setFont("helvetica", "bold");
             doc.setFontSize(16);
             doc.text(
-                "TIIX SQL Studio — Query Execution Report",
+                "TIIX SQL Studio â€” Query Execution Report",
                 margin,
                 36
             );
@@ -3025,12 +3430,12 @@
             doc.setFontSize(9);
             doc.setTextColor(224, 231, 255);
             doc.text(
-                `Generated ${generatedAt.toLocaleString()} · ${lastCount} row${lastCount === 1 ? "" : "s"}${lastTruncated ? " (truncated)" : ""}`,
+                `Generated ${generatedAt.toLocaleString()} Â· ${lastCount} row${lastCount === 1 ? "" : "s"}${lastTruncated ? " (truncated)" : ""}`,
                 margin,
                 56
             );
             doc.text(
-                `Database: ${sourceName} · Execution: ` +
+                `Database: ${sourceName} Â· Execution: ` +
                 (lastCount > 0 ? "returned rows" : "completed, no rows"),
                 margin,
                 70
@@ -3390,7 +3795,7 @@
         } catch (error) {
 
             showToast(
-                "PDF export failed — " +
+                "PDF export failed â€” " +
                 (error && error.message
                     ? error.message
                     : "unexpected error")
@@ -3695,7 +4100,7 @@
     loadLiveSchema();
 
     /* =====================================================
-       WORKSPACE — SESSIONS / UPLOAD / APPROVALS / SERVER PDF
+       WORKSPACE â€” SESSIONS / UPLOAD / APPROVALS / SERVER PDF
     ===================================================== */
 
     function openWorkspace(which) {
@@ -3742,6 +4147,10 @@
             const response = await fetch("/api/sessions");
             const body = await response.json();
 
+            if (handleAuthFailure(response)) {
+                return;
+            }
+
             if (!body.sessions || !body.sessions.length) {
 
                 container.innerHTML =
@@ -3772,7 +4181,7 @@
                 sub.className = "ws-row-sub";
                 sub.textContent =
                     (session.summary
-                        ? session.summary.replace("Recent questions:\n", "") + " — "
+                        ? session.summary.replace("Recent questions:\n", "") + " â€” "
                         : "") +
                     session.updated_at;
 
@@ -3911,6 +4320,10 @@
                 body: form
             });
 
+            if (handleAuthFailure(response)) {
+                return;
+            }
+
             const result = await response.json();
 
             if (!response.ok) {
@@ -3934,9 +4347,9 @@
                 "</div>" +
                 '<div class="ws-mono" style="margin-top:6px">' +
                 result.kind.toUpperCase() +
-                " · " +
+                " Â· " +
                 result.table_count +
-                " tables · " +
+                " tables Â· " +
                 result.column_count +
                 " columns</div>" +
                 '<div class="ws-tags">' +
@@ -3978,6 +4391,10 @@
             const response = await fetch("/api/approvals?status=pending");
             const body = await response.json();
 
+            if (handleAuthFailure(response)) {
+                return;
+            }
+
             if (!body.approvals || !body.approvals.length) {
 
                 container.innerHTML =
@@ -3999,7 +4416,7 @@
                 head.className = "ws-mono";
                 head.textContent =
                     approval.kind.toUpperCase() +
-                    " — " +
+                    " â€” " +
                     approval.created_at;
 
                 const sql = document.createElement("div");
@@ -4102,6 +4519,10 @@
                     model: modelLabel()
                 })
             });
+
+            if (handleAuthFailure(response)) {
+                return;
+            }
 
             if (!response.ok) {
 

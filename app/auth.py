@@ -106,6 +106,18 @@ def _sign(payload, secret):
     ).hexdigest()
 
 
+def sign_payload(payload, secret):
+    """Sign an arbitrary string with the shared HMAC helper.
+
+    Exposed so app/access.py derives its visitor cookies from the same
+    primitive as the admin session instead of duplicating the crypto.
+    Callers choose their own payload format and are responsible for
+    including everything that must be covered by the signature.
+    """
+
+    return _sign(payload, secret)
+
+
 def create_session_token(secret=None, ttl_seconds=None):
     """Return a signed session token that expires after the TTL.
 

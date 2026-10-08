@@ -24,6 +24,19 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 DATABASE_PATH = os.path.join(BASE_DIR, "store.db")
 INDEX_PATH = os.path.join(BASE_DIR, "index.html")
 
+# Public informational pages. Static, self-contained HTML documents
+# served read-only alongside the main workspace. They contain no
+# secrets and no application logic.
+ABOUT_PATH = os.path.join(BASE_DIR, "about.html")
+CONTACT_PATH = os.path.join(BASE_DIR, "contact.html")
+PRIVACY_PATH = os.path.join(BASE_DIR, "privacy.html")
+
+# Brand assets referenced by the HTML pages (for example the header
+# logo at /tiix-logo-symbol.png). Vercel serves this directory at the
+# site root; the application must serve the same URLs locally so the
+# references resolve everywhere.
+PUBLIC_DIR = os.path.join(BASE_DIR, "public")
+
 # Writable paths. store.db and index.html ship with the deployment and
 # are only ever read, so they stay in the project directory.
 # app_meta.db and uploads/ are written at runtime, and Vercel Functions
@@ -106,6 +119,64 @@ AUTH_COOKIE_SECURE = _flag_env(
 )
 
 # ------------------------------------------------------------
+# VISITOR ACCESS (FREE TRIAL + APP ACCESS CODE)
+# ------------------------------------------------------------
+# The demo path. A visitor reaches the app with no credential at all,
+# gets TRIAL_MAX_ATTEMPTS questions answered, and can then trade an
+# App Access Code for an ACCESS_SESSION_TTL_SECONDS session.
+#
+# APP_API_KEY is deliberately NOT this gate: it is the owner/admin
+# secret guarding sessions, uploads, approvals and reports, and it
+# never leaves the server. Mixing the two would mean shipping the
+# admin secret to every visitor, which is the one thing this design
+# refuses to do.
+#
+# APP_ACCESS_CODE IS a secret (it grants paid provider calls) but it is
+# deliberately defaulted so the demo works out of the box. Change it
+# before exposing the deployment to anyone.
+
+APP_ACCESS_CODE = os.getenv("APP_ACCESS_CODE", "1234")
+
+# Optional dedicated signing secret for the visitor cookies. It is not
+# required: app/access.py derives the signing key from APP_API_KEY
+# when this is unset, and fails closed when neither is configured. Set
+# it only if you want to rotate visitor sessions without rotating the
+# admin secret.
+ACCESS_SIGNING_SECRET = os.getenv("ACCESS_SIGNING_SECRET")
+
+ACCESS_COOKIE_NAME = os.getenv("ACCESS_COOKIE_NAME", "tiix_access")
+TRIAL_COOKIE_NAME = os.getenv("TRIAL_COOKIE_NAME", "tiix_trial")
+
+# Same window as an authenticated session: long enough to finish a
+# working session, short enough that a leaked cookie stops being
+# useful quickly.
+ACCESS_SESSION_TTL_SECONDS = _positive_int_env(
+    "ACCESS_SESSION_TTL_SECONDS",
+    43200,
+)
+
+# The trial counter outlives an access session on purpose. A visitor
+# who clears cookies or opens a private window is treated as a new
+# visitor by the signed token as well, so the only thing a shorter
+# window would achieve is handing out a second allowance every few
+# hours to the same browser.
+TRIAL_SESSION_TTL_SECONDS = _positive_int_env(
+    "TRIAL_SESSION_TTL_SECONDS",
+    2592000,
+)
+
+TRIAL_MAX_ATTEMPTS = _positive_int_env(
+    "TRIAL_MAX_ATTEMPTS",
+    5,
+)
+
+# Shown to a visitor in the access modal. Deliberately configurable
+# rather than hardcoded: it is the project's contact address, not a
+# property of the code. When unset the modal hides the contact block
+# instead of showing a placeholder that looks like a real address.
+OWNER_CONTACT_EMAIL = (os.getenv("OWNER_CONTACT_EMAIL") or "").strip()
+
+# ------------------------------------------------------------
 # QUERY / PROMPT LIMITS
 # ------------------------------------------------------------
 
@@ -162,6 +233,29 @@ UPLOAD_RATE_LIMIT_REQUESTS = _positive_int_env(
 UPLOAD_RATE_LIMIT_WINDOW_SECONDS = _positive_int_env(
     "UPLOAD_RATE_LIMIT_WINDOW_SECONDS",
     60,
+)
+
+# /api/access/unlock is the same brute-force surface as the login
+# routes, so it gets the same deliberately long window.
+ACCESS_UNLOCK_RATE_LIMIT_REQUESTS = _positive_int_env(
+    "ACCESS_UNLOCK_RATE_LIMIT_REQUESTS",
+    10,
+)
+ACCESS_UNLOCK_RATE_LIMIT_WINDOW_SECONDS = _positive_int_env(
+    "ACCESS_UNLOCK_RATE_LIMIT_WINDOW_SECONDS",
+    300,
+)
+
+# /api/access/request is unauthenticated, takes no expensive work and
+# stores nothing, so it is bounded mainly to stop a client from
+# looping on it.
+ACCESS_REQUEST_RATE_LIMIT_REQUESTS = _positive_int_env(
+    "ACCESS_REQUEST_RATE_LIMIT_REQUESTS",
+    10,
+)
+ACCESS_REQUEST_RATE_LIMIT_WINDOW_SECONDS = _positive_int_env(
+    "ACCESS_REQUEST_RATE_LIMIT_WINDOW_SECONDS",
+    300,
 )
 
 # ------------------------------------------------------------

@@ -64,6 +64,42 @@ configured. Only `/api/ask` needs one.
 |---|---|
 | `VERCEL` | `app/config.py:_writable_path()` branches on it. When set, `META_DB_PATH` and `UPLOAD_DIR` resolve to `/tmp` instead of the read-only project directory, and `AUTH_COOKIE_SECURE` defaults to `True`. **Without it the application tries to write into the deployment bundle.** |
 
+### Visitor access: free attempts and the App Access Code
+
+`/api/ask` is a public route now. Anyone may use it, with no credential,
+for `TRIAL_MAX_ATTEMPTS` requests per browser, then must present
+`APP_ACCESS_CODE`. Everything else under `/api` is unchanged and still
+requires `APP_API_KEY`.
+
+| Name | Default | Consequence if unset or wrong |
+|---|---|---|
+| `APP_ACCESS_CODE` | `1234` | **Set this in production.** The default is a guess, published in the source. With the default still in place, anyone who reads the repository can unlock. |
+| `ACCESS_SIGNING_SECRET` | derived from `APP_API_KEY` | Falls back to a domain-separated HMAC derived from `APP_API_KEY`, so no extra secret must be managed. Set it explicitly if you rotate `APP_API_KEY`: rotating the fallback invalidates every access and trial cookie, i.e. everyone falls back to the free allowance. |
+| `TRIAL_MAX_ATTEMPTS` | `5` | Free requests per browser before the code is demanded. |
+| `TRIAL_COOKIE_NAME` | `tiix_trial` | Cookie holding the signed attempt count. |
+| `ACCESS_COOKIE_NAME` | `tiix_access` | Cookie holding the signed unlocked state. |
+| `ACCESS_SESSION_TTL_SECONDS` | `43200` (12h) | How long an unlocked visitor stays unlocked. |
+| `TRIAL_SESSION_TTL_SECONDS` | `2592000` (30d) | How long a partly-used free allowance survives. |
+| `OWNER_CONTACT_EMAIL` | empty | Shown in the unlock modal when set. **Not a mail transport**: `/api/access/request` validates the address, stores nothing, sends nothing, and answers `notification_sent: false`. Honour those requests by hand. |
+
+`APP_API_KEY` remains required even though `/api/ask` is public: it is
+the signing key for both visitor cookies, so without it `require_ask_access`
+raises 503 and the free allowance is unavailable. `/api/public/schema` is
+the one endpoint that works with no secret configured at all, so the page
+still renders.
+
+The trial counter and the access cookie are both stateless signed
+cookies, so they survive cold starts and work across instances exactly
+like the admin session. Two consequences, stated plainly:
+
+- **The free allowance is per browser, not per person.** It is enforced
+  by an HttpOnly cookie, so clearing cookies or using a private window
+  resets it. That is a deliberate trade for having no server-side store
+  on a serverless platform; it raises the cost of casual abuse without
+  raising it against anyone who is trying.
+- **Rotating `ACCESS_SIGNING_SECRET` locks out** every unlocked visitor
+  and every part-used allowance until they unlock again.
+
 ### Optional, all with safe defaults
 
 `NVIDIA_BASE_URL`, `LLM_PROVIDER`, `AUTH_COOKIE_NAME`,
@@ -71,9 +107,16 @@ configured. Only `/api/ask` needs one.
 `APP_RATE_LIMIT_ENABLED`, `ASK_RATE_LIMIT_REQUESTS`,
 `ASK_RATE_LIMIT_WINDOW_SECONDS`, `LOGIN_RATE_LIMIT_REQUESTS`,
 `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `UPLOAD_RATE_LIMIT_REQUESTS`,
-`UPLOAD_RATE_LIMIT_WINDOW_SECONDS`, `LLM_MAX_CONCURRENCY`,
+`UPLOAD_RATE_LIMIT_WINDOW_SECONDS`, `ACCESS_UNLOCK_RATE_LIMIT_REQUESTS`,
+`ACCESS_UNLOCK_RATE_LIMIT_WINDOW_SECONDS`,
+`ACCESS_REQUEST_RATE_LIMIT_REQUESTS`,
+`ACCESS_REQUEST_RATE_LIMIT_WINDOW_SECONDS`,
+`LLM_MAX_CONCURRENCY`,
 `LLM_CONCURRENCY_RETRY_AFTER_SECONDS`, `LLM_TIMEOUT_SECONDS`,
 `LLM_RETRY_BACKOFF_CAP_SECONDS`, `META_DB_PATH`, `UPLOAD_DIR`.
+
+Both visitor cookies inherit `AUTH_COOKIE_SECURE`, so they cannot
+disagree with the admin session about whether the deployment is https.
 
 Precedence for the two writable paths is
 `explicit env override > /tmp (when VERCEL is set) > project dir`.
@@ -124,6 +167,7 @@ this is relied upon.
 | Rate-limit buckets | `app/ratelimit.py` | Per instance, resets on cold start |
 | LLM in-flight counter | `app/llm_concurrency.py` | Per instance, resets on cold start |
 | Authentication sessions | `app/auth.py` | **Stateless** — a signed HMAC token in an HttpOnly cookie. Survives cold starts and works across instances. No server-side session store. |
+| Access codes and free attempts | `app/access.py` | **Stateless** — signed HMAC tokens in HttpOnly cookies, same properties and same trade-off. |
 
 The rate limiter and the concurrency cap are **per-instance
 defense-in-depth, not global quotas.** The real ceilings are

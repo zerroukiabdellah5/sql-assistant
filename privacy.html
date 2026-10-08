@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — TIIX SQL Studio</title>
+    <meta name="description" content="Privacy Policy for TIIX SQL Studio: what may be processed, how it is used, and how AI processing and data handling work.">
+    <script>
+        (function () {
+            try {
+                if ((localStorage.getItem("tiix-theme") || "dark") === "light") {
+                    document.documentElement.classList.add("light");
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0a0c0f;
+            --panel-glass: rgba(17, 21, 26, .72);
+            --panel-strong: #171c22;
+            --panel-soft: #141920;
+            --inset: #0b0e12;
+            --border: rgba(255, 255, 255, .065);
+            --border-strong: rgba(255, 255, 255, .12);
+            --border-hover: rgba(111, 177, 203, .46);
+            --text: #edf1f6;
+            --text-soft: #c3cad3;
+            --muted: #98a1ac;
+            --muted-2: #7c848f;
+            --accent: #6fb1cb;
+            --accent-2: #a6e4df;
+            --accent-3: #4ea2ae;
+            --accent-ink: #9fdfdb;
+            --success: #35d6a0;
+            --success-ink: #45e3ab;
+            --ring: rgba(111, 177, 203, .38);
+            --wash: rgba(111, 177, 203, .07);
+            --wash-strong: rgba(111, 177, 203, .13);
+            --shadow: inset 0 1px 0 rgba(255, 255, 255, .035), 0 28px 64px -34px rgba(0, 0, 0, .90);
+            --shadow-sm: 0 14px 34px -20px rgba(0, 0, 0, .85);
+            --glow: 0 0 0 1px rgba(111, 177, 203, .16), 0 20px 54px -28px rgba(78, 162, 174, .60);
+            --hairline: inset 0 1px 0 rgba(255, 255, 255, .04);
+            --radius: 16px;
+            --radius-sm: 11px;
+            --ease: cubic-bezier(.2, .7, .3, 1);
+            --top-band: linear-gradient(90deg, #6fd6d0, #a8e6e1 18%, #45a3b0 46%, #6f9fd0 76%, #5b7fb0);
+        }
+
+        html.light {
+            color-scheme: light;
+            --bg: #eef2f7;
+            --panel-glass: rgba(255, 255, 255, .74);
+            --panel-strong: #ffffff;
+            --panel-soft: rgba(248, 250, 252, .95);
+            --inset: rgba(255, 255, 255, .9);
+            --border: rgba(15, 23, 42, .10);
+            --border-strong: rgba(15, 23, 42, .16);
+            --border-hover: rgba(14, 116, 144, .38);
+            --text: #0b1220;
+            --text-soft: #334155;
+            --muted: #475569;
+            --muted-2: #646b78;
+            --accent: #0e7490;
+            --accent-2: #0d7d8c;
+            --accent-3: #0e7490;
+            --accent-ink: #0b5c73;
+            --success: #059669;
+            --success-ink: #047857;
+            --ring: rgba(14, 116, 144, .24);
+            --wash: rgba(14, 116, 144, .07);
+            --wash-strong: rgba(14, 116, 144, .13);
+            --shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 24px 56px -34px rgba(15, 23, 42, .28);
+            --shadow-sm: 0 12px 30px -20px rgba(15, 23, 42, .24);
+            --glow: 0 0 0 1px rgba(14, 116, 144, .14), 0 20px 48px -30px rgba(14, 116, 144, .45);
+            --hairline: inset 0 1px 0 rgba(255, 255, 255, .7);
+            --top-band: linear-gradient(90deg, #0d7d8c, #12a3a0 18%, #0e7490 46%, #2f6fb0 76%, #3f5aa8);
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(1100px 620px at 10% -12%, rgba(78, 162, 174, .20), transparent 62%),
+                radial-gradient(920px 560px at 102% -6%, rgba(111, 177, 203, .16), transparent 64%),
+                radial-gradient(1040px 720px at 62% 112%, rgba(111, 177, 203, .10), transparent 66%),
+                radial-gradient(720px 520px at 16% 108%, rgba(189, 168, 207, .07), transparent 72%),
+                linear-gradient(180deg, #0c1014 0%, var(--bg) 38%, #0b0e12 100%);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        html.light body {
+            background:
+                radial-gradient(1100px 620px at 10% -12%, rgba(14, 116, 144, .12), transparent 62%),
+                radial-gradient(920px 560px at 102% -6%, rgba(14, 116, 144, .10), transparent 64%),
+                linear-gradient(180deg, #f4f7fb 0%, var(--bg) 44%, #eaeff6 100%);
+        }
+
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, .022) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, .022) 1px, transparent 1px);
+            background-size: 58px 58px;
+            -webkit-mask-image: radial-gradient(ellipse 92% 70% at 50% 0%, #000 0%, rgba(0, 0, 0, .35) 55%, transparent 82%);
+            mask-image: radial-gradient(ellipse 92% 70% at 50% 0%, #000 0%, rgba(0, 0, 0, .35) 55%, transparent 82%);
+            opacity: .6;
+        }
+        html.light body::after {
+            background-image:
+                linear-gradient(rgba(15, 23, 42, .030) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(15, 23, 42, .030) 1px, transparent 1px);
+            opacity: .55;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--top-band);
+            opacity: .92;
+            box-shadow: 0 0 22px rgba(78, 162, 174, .35);
+            pointer-events: none;
+            z-index: 200;
+        }
+        html.light body::before { opacity: .75; box-shadow: none; }
+
+        a { color: var(--accent-2); }
+        :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 8px; }
+        ::selection { background: rgba(111, 177, 203, .30); color: #ffffff; }
+        .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+        .app-shell { width: min(1160px, calc(100% - 32px)); margin: auto; padding: 18px 0 44px; position: relative; z-index: 1; }
+
+        .glass {
+            background: var(--panel-glass);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            backdrop-filter: saturate(160%) blur(16px);
+            -webkit-backdrop-filter: saturate(160%) blur(16px);
+        }
+
+        /* ---------- Topbar ---------- */
+        .topbar {
+            min-height: 66px;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 14px; padding: 11px 14px; border-radius: 18px;
+            position: sticky; top: 12px; z-index: 50;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; min-width: 0; text-decoration: none; color: inherit; }
+        .brand-mark {
+            width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; color: #06222a; flex-shrink: 0;
+            background: linear-gradient(140deg, #b6ebe6, #56b6bf 54%, #2b7280);
+            box-shadow: 0 0 26px rgba(78, 162, 174, .42), inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(6, 34, 42, .35);
+            overflow: hidden;
+        }
+        .brand-mark img { width: 34px; height: 34px; object-fit: contain; display: block; }
+        .brand-name { font-size: 14.5px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+        .studio-badge {
+            font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+            color: var(--accent-ink); background: var(--wash);
+            border: 1px solid rgba(111, 177, 203, .28); padding: 3px 7px; border-radius: 999px;
+        }
+        .brand-subtitle { margin-top: 2px; color: var(--muted); font-size: 11px; }
+        .top-actions { display: flex; align-items: center; gap: 8px; }
+
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 9px 15px; border-radius: var(--radius-sm); cursor: pointer;
+            font-size: 12px; font-weight: 700; letter-spacing: .02em; text-decoration: none;
+            border: 1px solid transparent; transition: .18s var(--ease); white-space: nowrap;
+        }
+        .btn-ghost { color: var(--text-soft); background: var(--inset); border-color: var(--border); }
+        .btn-ghost:hover { color: var(--text); border-color: var(--border-hover); background: var(--wash); transform: translateY(-1px); }
+
+        .icon-btn {
+            width: 38px; height: 38px; display: grid; place-items: center; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--inset); color: var(--muted);
+            cursor: pointer; transition: .18s var(--ease);
+        }
+        .icon-btn:hover { color: var(--accent-2); border-color: var(--border-hover); background: var(--wash); transform: translateY(-1px); }
+
+        /* ---------- Hero ---------- */
+        .page-hero { position: relative; overflow: hidden; padding: 46px 36px 40px; border-radius: 22px; margin-top: 18px; }
+        .page-hero::before { content: ""; position: absolute; width: 440px; height: 440px; right: -170px; top: -220px; background: radial-gradient(circle, rgba(78, 162, 174, .26), transparent 68%); pointer-events: none; }
+        .page-hero::after { content: ""; position: absolute; width: 240px; height: 240px; left: -120px; bottom: -150px; background: radial-gradient(circle, rgba(166, 228, 223, .12), transparent 68%); pointer-events: none; }
+        .page-hero > * { position: relative; z-index: 2; }
+        .eyebrow { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 14px; color: var(--accent-ink); background: var(--wash); border: 1px solid rgba(111, 177, 203, .26); font-size: 9.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; }
+        .eyebrow i { width: 6px; height: 6px; border-radius: 999px; background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); }
+        .page-hero h1 { margin: 0; font-size: clamp(30px, 3.6vw, 48px); line-height: 1.05; letter-spacing: -.045em; font-weight: 800; }
+        .gradient-text { background: linear-gradient(104deg, var(--text) 12%, var(--accent) 54%, var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .lead { max-width: 760px; margin: 15px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.78; }
+        .updated { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 7px 12px; border-radius: 10px; color: var(--text-soft); background: var(--panel-soft); border: 1px solid var(--border); font-family: "JetBrains Mono", monospace; font-size: 10.5px; }
+
+        /* ---------- Layout ---------- */
+        .policy-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 22px; margin-top: 22px; align-items: start; }
+        .toc { position: sticky; top: 96px; padding: 18px; border-radius: var(--radius); background: var(--panel-soft); border: 1px solid var(--border); box-shadow: var(--hairline); }
+        .toc h2 { margin: 0 0 10px; color: var(--muted-2); font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+        .toc ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+        .toc a { color: var(--muted); text-decoration: none; font-size: 11.5px; line-height: 1.45; transition: .16s var(--ease); }
+        .toc a:hover, .toc a:focus-visible { color: var(--accent-2); }
+
+        .policy { padding: 8px 4px 0; }
+        .policy section { padding: 18px 0; border-bottom: 1px solid var(--border); scroll-margin-top: 96px; }
+        .policy section:last-child { border-bottom: 0; }
+        .policy h2 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+        .policy h2 .num { color: var(--accent-ink); font-family: "JetBrains Mono", monospace; font-size: 12px; }
+        .policy p { margin: 0 0 10px; color: var(--text-soft); font-size: 13.5px; line-height: 1.85; }
+        .policy p:last-child { margin-bottom: 0; }
+        .policy ul { margin: 0 0 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+        .policy li { color: var(--text-soft); font-size: 13.5px; line-height: 1.8; }
+        .callout { margin: 4px 0 0; padding: 13px 15px; border-radius: 12px; color: var(--text-soft); background: var(--wash); border: 1px solid rgba(111, 177, 203, .22); font-size: 12.5px; line-height: 1.75; }
+        .callout strong { color: var(--text); }
+        .placeholder { font-family: "JetBrains Mono", monospace; color: var(--accent-ink); background: var(--wash); border: 1px dashed rgba(111, 177, 203, .34); padding: 2px 7px; border-radius: 7px; }
+
+        /* ---------- Footer ---------- */
+        .footer-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-top: 34px; padding: 16px 4px 2px; border-top: 1px solid var(--border); color: var(--muted-2); font-size: 11px; }
+        .footer-brand-block { display: flex; flex-direction: column; gap: 3px; }
+        .footer-brand { color: var(--muted); font-weight: 800; letter-spacing: .1em; text-transform: uppercase; font-size: 10px; }
+        .footer-tag { font-size: 10.5px; }
+        .footer-nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+        .footer-nav a { color: var(--muted); text-decoration: none; font-size: 11.5px; font-weight: 600; transition: .16s var(--ease); }
+        .footer-nav a:hover, .footer-nav a:focus-visible { color: var(--accent-2); }
+        .footer-nav a[aria-current="page"] { color: var(--accent-ink); }
+
+        .fade-in { animation: fadeIn .45s var(--ease) both; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        @media (max-width: 900px) {
+            .policy-layout { grid-template-columns: 1fr; }
+            .toc { position: static; }
+        }
+        @media (max-width: 700px) {
+            .app-shell { width: calc(100% - 18px); padding-top: 8px; }
+            .topbar { top: 6px; border-radius: 14px; padding: 10px 11px; }
+            .brand-subtitle, .studio-badge { display: none; }
+            .page-hero { padding: 30px 20px 28px; border-radius: 18px; }
+            .footer-bar { flex-direction: column; align-items: flex-start; }
+        }
+        @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+    </style>
+</head>
+
+<body>
+
+<div class="app-shell">
+
+    <header class="topbar glass">
+        <a class="brand" href="/">
+            <span class="brand-mark"><img src="/tiix-logo-symbol.png" alt=""></span>
+            <span>
+                <span class="brand-name">TIIX SQL <span class="studio-badge">Studio</span></span>
+                <span class="brand-subtitle" style="display:block">Natural language database intelligence</span>
+            </span>
+        </a>
+        <div class="top-actions">
+            <a class="btn btn-ghost" href="/">Open Studio</a>
+            <button id="themeToggle" class="icon-btn" type="button" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+                <svg id="themeIcon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main>
+
+        <section class="page-hero glass fade-in">
+            <span class="eyebrow"><i></i>Your data</span>
+            <h1>Privacy <span class="gradient-text">Policy</span></h1>
+            <p class="lead">
+                This policy explains, in plain language, what information TIIX SQL Studio
+                may process, how it is used, and how AI processing and third-party
+                services are involved. Read it before you connect or upload any business
+                data.
+            </p>
+            <span class="updated">Last updated: October 2026</span>
+        </section>
+
+        <div class="policy-layout">
+
+            <nav class="toc" aria-label="Privacy policy contents">
+                <h2>Contents</h2>
+                <ol>
+                    <li><a href="#introduction">Introduction</a></li>
+                    <li><a href="#information">Information that may be processed</a></li>
+                    <li><a href="#use">How information is used</a></li>
+                    <li><a href="#database">Database &amp; business data</a></li>
+                    <li><a href="#ai">AI processing</a></li>
+                    <li><a href="#third-parties">Third-party services</a></li>
+                    <li><a href="#logs">Logs &amp; technical information</a></li>
+                    <li><a href="#cookies">Cookies &amp; session information</a></li>
+                    <li><a href="#retention">Data retention</a></li>
+                    <li><a href="#security">Data security</a></li>
+                    <li><a href="#rights">User rights</a></li>
+                    <li><a href="#links">Third-party links</a></li>
+                    <li><a href="#changes">Changes to this policy</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ol>
+            </nav>
+
+            <div class="policy">
+
+                <section id="introduction">
+                    <h2><span class="num">01</span>Introduction</h2>
+                    <p>
+                        TIIX SQL Studio is an AI-powered SQL assistant that helps people
+                        explore business databases using natural language. This policy
+                        describes how the application handles information when you use it.
+                    </p>
+                    <p>
+                        It applies to this TIIX SQL Studio deployment and is written to be
+                        understandable rather than legalistic. It is not a substitute for
+                        legal advice, and it should be reviewed by the operator before the
+                        deployment is used with data that is subject to specific legal
+                        requirements.
+                    </p>
+                </section>
+
+                <section id="information">
+                    <h2><span class="num">02</span>Information that may be processed</h2>
+                    <p>Depending on how the deployment is configured and used, the following may be processed:</p>
+                    <ul>
+                        <li><strong>Your questions.</strong> The natural-language prompts you type into the studio.</li>
+                        <li><strong>Conversation context.</strong> Recent questions and the SQL previously generated in a session, used to understand follow-up questions.</li>
+                        <li><strong>Database structure.</strong> Read-only metadata such as table names, column names, types and detected relationships. This does not include the values stored in your rows.</li>
+                        <li><strong>Query results.</strong> Rows returned by read-only queries, shown in your browser.</li>
+                        <li><strong>Uploaded files.</strong> If you import a database, SQL script or spreadsheet, the file is processed to make its contents queryable in a sandbox.</li>
+                        <li><strong>Access information.</strong> An email address, only if a visitor submits one through the access request form.</li>
+                    </ul>
+                </section>
+
+                <section id="use">
+                    <h2><span class="num">03</span>How information is used</h2>
+                    <p>Information is used only to provide and operate the assistant, including to:</p>
+                    <ul>
+                        <li>turn your question into SQL and an explanation;</li>
+                        <li>run the generated query against the connected database;</li>
+                        <li>display results and optional visualizations;</li>
+                        <li>keep a short conversation context for follow-up questions;</li>
+                        <li>protect the service, such as through rate limiting and abuse prevention.</li>
+                    </ul>
+                    <p>The application does not sell your information, and it does not use your business data to train its own models.</p>
+                </section>
+
+                <section id="database">
+                    <h2><span class="num">04</span>Database &amp; business data</h2>
+                    <p>
+                        TIIX connects to a database that the operator controls. Generated
+                        queries are read-only: the application is designed to run SELECT
+                        statements and does not modify your data. Query results are returned
+                        to the browser that asked for them.
+                    </p>
+                    <p>
+                        Uploaded files are handled in a sandboxed area and used to build a
+                        queryable copy. Because databases can contain personal or sensitive
+                        information, you should only connect or upload data that you are
+                        authorised to use, and you should understand what that data contains.
+                    </p>
+                </section>
+
+                <section id="ai">
+                    <h2><span class="num">05</span>AI processing</h2>
+                    <p>
+                        When you ask a question, the assistant sends a request to an external
+                        AI provider to generate SQL and an explanation. That request can
+                        include your question, recent conversation context, and the
+                        database's structural metadata (table and column names and types).
+                        It does not include the values stored in your rows, because the
+                        assistant generates SQL before any query is run.
+                    </p>
+                    <div class="callout">
+                        <strong>AI-generated output can be wrong.</strong> Generated SQL and
+                        insights may contain errors, may misinterpret your question, or may
+                        not apply to your situation. Review them before relying on them for
+                        important business decisions.
+                    </div>
+                </section>
+
+                <section id="third-parties">
+                    <h2><span class="num">06</span>Third-party services</h2>
+                    <p>
+                        The assistant relies on third-party AI infrastructure to generate SQL.
+                        Depending on configuration, requests may be sent to an external AI
+                        provider such as <strong>NVIDIA's API</strong> or <strong>Google
+                        Gemini</strong>. This means that the parts of a request described in
+                        the AI processing section above are transmitted to infrastructure
+                        outside this deployment, and are handled according to that provider's
+                        own terms and privacy policy.
+                    </p>
+                    <p>
+                        This deployment does not claim that data is never sent to third
+                        parties. It is transparent that AI processing may involve
+                        third-party infrastructure. The operator of a deployment is
+                        responsible for reviewing each provider's terms before use.
+                    </p>
+                </section>
+
+                <section id="logs">
+                    <h2><span class="num">07</span>Logs &amp; technical information</h2>
+                    <p>
+                        The application and its hosting platform may record technical
+                        information such as request timestamps, a request identifier, status
+                        codes, durations and error traces. These records are used to operate,
+                        troubleshoot and protect the service.
+                    </p>
+                    <p>
+                        Sensitive values are not written to logs by the application: API keys,
+                        passwords and access credentials are redacted or omitted. Logs are
+                        retained by the hosting platform according to its own settings.
+                    </p>
+                </section>
+
+                <section id="cookies">
+                    <h2><span class="num">08</span>Cookies &amp; session information</h2>
+                    <p>
+                        TIIX uses a small number of first-party cookies to make the studio
+                        work. These are session cookies, not advertising cookies:
+                    </p>
+                    <ul>
+                        <li><strong>Authentication session cookie.</strong> Set for an owner sign-in, so the browser can prove its session without exposing the secret to scripts. It is HttpOnly and not readable by JavaScript.</li>
+                        <li><strong>Access and trial cookies.</strong> Used to recognise a visitor's access session and to track free trial attempts.</li>
+                        <li><strong>Theme preference.</strong> Your dark or light choice is stored locally in your browser (localStorage), not sent to the server.</li>
+                    </ul>
+                    <p>No third-party advertising or tracking cookies are set by the application.</p>
+                </section>
+
+                <section id="retention">
+                    <h2><span class="num">09</span>Data retention</h2>
+                    <p>
+                        Conversation sessions and related metadata are stored for as long as
+                        they are needed to provide the session history you may rely on, and
+                        can be deleted from within the studio. Uploaded sandbox files remain
+                        until they are removed. Trial and access cookies expire according to
+                        their configured lifetimes.
+                    </p>
+                    <p>
+                        On hosted deployments, the underlying platform may keep logs and
+                        backups for its own retention period. Where the application stores
+                        data on a read-only or ephemeral filesystem, that data is not
+                        expected to persist.
+                    </p>
+                </section>
+
+                <section id="security">
+                    <h2><span class="num">10</span>Data security</h2>
+                    <p>
+                        The application is built with security-conscious choices: generated
+                        SQL is read-only by construction, credentials are kept on the server
+                        and compared in constant time, sensitive values are not returned to
+                        the browser or written to logs, and request rate limits are applied
+                        to costly operations.
+                    </p>
+                    <p>
+                        No system can be described as perfectly secure. Reasonable measures
+                        are taken, but absolute security cannot be guaranteed, and you should
+                        not connect data whose exposure would be unacceptable without first
+                        evaluating the deployment yourself.
+                    </p>
+                </section>
+
+                <section id="rights">
+                    <h2><span class="num">11</span>User rights</h2>
+                    <p>
+                        Depending on where you are and on applicable law, you may have rights
+                        regarding information about you, such as requesting access to it,
+                        correcting it, or asking for it to be deleted. Some of these can be
+                        exercised directly in the studio, for example by deleting a session.
+                    </p>
+                    <p>
+                        To make a request, use the contact details in the final section of
+                        this policy. This policy does not itself create rights beyond those
+                        provided by applicable law.
+                    </p>
+                </section>
+
+                <section id="links">
+                    <h2><span class="num">12</span>Third-party links</h2>
+                    <p>
+                        The interface may reference external services or documentation. This
+                        privacy policy does not cover those external sites, and the
+                        application is not responsible for their content or practices. Review
+                        their own privacy policies before using them.
+                    </p>
+                </section>
+
+                <section id="changes">
+                    <h2><span class="num">13</span>Changes to this Privacy Policy</h2>
+                    <p>
+                        This policy may be updated to reflect changes to the application or to
+                        how it handles information. When it changes, the "Last updated" date
+                        at the top of this page will be revised. Continued use of the
+                        assistant after an update means the revised policy applies.
+                    </p>
+                </section>
+
+                <section id="contact">
+                    <h2><span class="num">14</span>Contact</h2>
+                    <p>
+                        Questions about this policy or about how data is handled can be sent
+                        to <span class="placeholder">[CONTACT EMAIL]</span>. Replace this
+                        placeholder with the project's real contact address before publishing
+                        the deployment.
+                    </p>
+                </section>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <footer class="footer-bar">
+        <div class="footer-brand-block">
+            <span class="footer-brand">TIIX SQL Studio</span>
+            <span class="footer-tag">AI-powered database exploration</span>
+        </div>
+        <nav class="footer-nav" aria-label="Information">
+            <a href="/about">About</a>
+            <a href="/contact">Contact</a>
+            <a href="/privacy" aria-current="page">Privacy</a>
+        </nav>
+    </footer>
+
+</div>
+
+<script>
+    function themeIconSvg(light) {
+        return light
+            ? '<path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 3v2m0 14v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M3 12h2m14 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" />'
+            : '<path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />';
+    }
+
+    function syncThemeIcon() {
+        var icon = document.getElementById("themeIcon");
+        if (icon) {
+            icon.innerHTML = themeIconSvg(document.documentElement.classList.contains("light"));
+        }
+    }
+
+    function toggleTheme() {
+        var root = document.documentElement;
+        root.classList.toggle("light");
+        var theme = root.classList.contains("light") ? "light" : "dark";
+        try { localStorage.setItem("tiix-theme", theme); } catch (e) {}
+        syncThemeIcon();
+    }
+
+    syncThemeIcon();
+</script>
+
+</body>
+</html>

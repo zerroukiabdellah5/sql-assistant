@@ -186,12 +186,42 @@ def test_cookie_from_login_form_authenticates_a_protected_route(
         assert response.status_code == 200
 
 
-def test_ask_stays_protected_without_a_session(anon_client):
-    """The dependency rejects before any model call is attempted."""
+def test_ask_is_reachable_without_a_session(anon_client, monkeypatch):
+    """/api/ask no longer refuses a visitor with no credential at all.
+
+    The empty prompt is the handler's own 400, which proves the request
+    got past the access gate - and a valid prompt would have reached a
+    provider, so it is deliberately not used here.
+    """
+
+    monkeypatch.setattr(
+        "app.main.ask_active",
+        lambda prompt, turns, request_id=None, generation=None: (
+            "SELECT 1",
+            "ok",
+        ),
+    )
 
     assert anon_client.post(
-        "/api/ask", json={"prompt": "count rows"}
-    ).status_code == 401
+        "/api/ask", json={"prompt": "   "}
+    ).status_code == 400
+
+
+def test_the_admin_session_cookie_is_still_required_for_the_guarded_surface(
+    meta_paths, app_secret
+):
+    """Widening /api/ask did not widen anything behind the guard."""
+
+    with TestClient(app) as client:
+        header = post_form(
+            client, app_secret
+        ).headers["set-cookie"]
+        token = re.search(rf"{COOKIE}=([^;]+)", header).group(1)
+
+        assert client.get(
+            "/api/sessions",
+            headers={"Cookie": f"{COOKIE}={token}"},
+        ).status_code == 200
 
 
 def test_tampered_session_cookie_is_refused(meta_paths, app_secret):

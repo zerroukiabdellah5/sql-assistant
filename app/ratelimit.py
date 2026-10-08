@@ -25,8 +25,8 @@
 #   * APP_API_KEY is never used as a key, and never hashed into one;
 #   * forwarded headers (x-forwarded-for, x-real-ip) are NOT read,
 #     because a client can send any value it likes. Only the
-#     socket-level peer address is used, and only for the login
-#     routes, which have no authenticated identity yet;
+#     socket-level peer address is used, and only for the routes that
+#     have no authenticated identity yet;
 #   * state is protected by a lock, because sync handlers run
 #     concurrently in the AnyIO threadpool;
 #   * unexpected failures fail CLOSED with 429, never a 500.
@@ -41,6 +41,7 @@ import time
 from fastapi import Depends, HTTPException, Request
 
 import app.config as config
+from app.access import require_ask_access, trial_token_for
 from app.auth import require_auth
 
 # Failures inside the limiter are real operational events, so they go
@@ -308,6 +309,55 @@ def _login_identity(request):
     return _digest(host)
 
 
+def _visitor_identity(request, access_type):
+    """Derive a limiter identity for a request that passed
+    require_ask_access.
+
+    /api/ask is reachable without any credential, so the identity has
+    to be derivable from whatever the caller happens to hold:
+
+    * "api-key": APP_API_KEY is SHARED, so every holder is one
+      principal and shares one bucket, exactly as above. The credential
+      is never read, hashed, or stored.
+    * "session" / "access-code": the cookie is a validated signed
+      token, so a digest of it is a stable, unforgeable identity for
+      its lifetime - and, unlike the shared secret, it is per visitor.
+    * "trial": the digest of the visitor's own signed trial token, so
+      one visitor's allowance cannot be spent by another. On a first
+      visit there is no cookie yet, so the token the request is about
+      to write is used instead; that keeps the identity stable from
+      the very first request.
+
+    Every value here is a truncated digest. No token, cookie, IP or
+    secret reaches the limiter's state in the clear.
+    """
+
+    if access_type == "api-key":
+        return _API_KEY_IDENTITY
+
+    if access_type == "trial":
+        token = trial_token_for(request)
+        token = token or request.cookies.get(
+            config.TRIAL_COOKIE_NAME
+        )
+    else:
+        cookie_name = {
+            "session": config.AUTH_COOKIE_NAME,
+            "access-code": config.ACCESS_COOKIE_NAME,
+        }.get(access_type)
+        token = (
+            request.cookies.get(cookie_name) if cookie_name else None
+        )
+
+    if token:
+        return _digest(token)
+
+    # A visitor whose identity could not be read from a cookie shares
+    # the hashed peer address, the same degradation as the login
+    # routes: over-restriction rather than under-restriction.
+    return _login_identity(request)
+
+
 # ------------------------------------------------------------
 # DEPENDENCY FACTORY
 # ------------------------------------------------------------
@@ -351,6 +401,38 @@ def rate_limit(scope, limit, window_seconds, pre_auth=False):
 
         _enforce(
             _authenticated_identity(request, auth_type),
+            scope,
+            limit,
+            window_seconds,
+        )
+
+    return dependency
+
+
+def rate_limit_visitor(scope, limit, window_seconds):
+    """Build a dependency limiting a route that needs no APP_API_KEY.
+
+    /api/ask is reachable by a visitor with no credential, so the
+    generic ``rate_limit`` factory cannot be used: it takes its
+    identity from require_auth, which would reject exactly the callers
+    this route now serves. Everything else is identical - the same
+    process-wide limiter, the same scope isolation, the same 429 plus
+    Retry-After, and the same ordering.
+
+    require_ask_access is declared as a sub-dependency so access is
+    settled BEFORE the counter is touched, in the same
+    authentication-then-limiting order as every protected route. It is
+    read only: an exhausted visitor is refused by it first and never
+    spends any of this bucket.
+    """
+
+    def dependency(
+        request: Request,
+        access_type: str = Depends(require_ask_access),
+    ):
+
+        _enforce(
+            _visitor_identity(request, access_type),
             scope,
             limit,
             window_seconds,

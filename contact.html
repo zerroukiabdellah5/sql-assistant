@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact — TIIX SQL Studio</title>
+    <meta name="description" content="Contact TIIX SQL Studio for questions, feedback, bug reports, product suggestions and partnerships.">
+    <script>
+        (function () {
+            try {
+                if ((localStorage.getItem("tiix-theme") || "dark") === "light") {
+                    document.documentElement.classList.add("light");
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0a0c0f;
+            --panel-glass: rgba(17, 21, 26, .72);
+            --panel-strong: #171c22;
+            --panel-soft: #141920;
+            --inset: #0b0e12;
+            --border: rgba(255, 255, 255, .065);
+            --border-strong: rgba(255, 255, 255, .12);
+            --border-hover: rgba(111, 177, 203, .46);
+            --text: #edf1f6;
+            --text-soft: #c3cad3;
+            --muted: #98a1ac;
+            --muted-2: #7c848f;
+            --accent: #6fb1cb;
+            --accent-2: #a6e4df;
+            --accent-3: #4ea2ae;
+            --accent-ink: #9fdfdb;
+            --success: #35d6a0;
+            --success-ink: #45e3ab;
+            --warning: #fbbf24;
+            --ring: rgba(111, 177, 203, .38);
+            --wash: rgba(111, 177, 203, .07);
+            --wash-strong: rgba(111, 177, 203, .13);
+            --shadow: inset 0 1px 0 rgba(255, 255, 255, .035), 0 28px 64px -34px rgba(0, 0, 0, .90);
+            --shadow-sm: 0 14px 34px -20px rgba(0, 0, 0, .85);
+            --glow: 0 0 0 1px rgba(111, 177, 203, .16), 0 20px 54px -28px rgba(78, 162, 174, .60);
+            --hairline: inset 0 1px 0 rgba(255, 255, 255, .04);
+            --radius: 16px;
+            --radius-sm: 11px;
+            --ease: cubic-bezier(.2, .7, .3, 1);
+            --top-band: linear-gradient(90deg, #6fd6d0, #a8e6e1 18%, #45a3b0 46%, #6f9fd0 76%, #5b7fb0);
+        }
+
+        html.light {
+            color-scheme: light;
+            --bg: #eef2f7;
+            --panel-glass: rgba(255, 255, 255, .74);
+            --panel-strong: #ffffff;
+            --panel-soft: rgba(248, 250, 252, .95);
+            --inset: rgba(255, 255, 255, .9);
+            --border: rgba(15, 23, 42, .10);
+            --border-strong: rgba(15, 23, 42, .16);
+            --border-hover: rgba(14, 116, 144, .38);
+            --text: #0b1220;
+            --text-soft: #334155;
+            --muted: #475569;
+            --muted-2: #646b78;
+            --accent: #0e7490;
+            --accent-2: #0d7d8c;
+            --accent-3: #0e7490;
+            --accent-ink: #0b5c73;
+            --success: #059669;
+            --success-ink: #047857;
+            --warning: #b45309;
+            --ring: rgba(14, 116, 144, .24);
+            --wash: rgba(14, 116, 144, .07);
+            --wash-strong: rgba(14, 116, 144, .13);
+            --shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 24px 56px -34px rgba(15, 23, 42, .28);
+            --shadow-sm: 0 12px 30px -20px rgba(15, 23, 42, .24);
+            --glow: 0 0 0 1px rgba(14, 116, 144, .14), 0 20px 48px -30px rgba(14, 116, 144, .45);
+            --hairline: inset 0 1px 0 rgba(255, 255, 255, .7);
+            --top-band: linear-gradient(90deg, #0d7d8c, #12a3a0 18%, #0e7490 46%, #2f6fb0 76%, #3f5aa8);
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(1100px 620px at 10% -12%, rgba(78, 162, 174, .20), transparent 62%),
+                radial-gradient(920px 560px at 102% -6%, rgba(111, 177, 203, .16), transparent 64%),
+                radial-gradient(1040px 720px at 62% 112%, rgba(111, 177, 203, .10), transparent 66%),
+                radial-gradient(720px 520px at 16% 108%, rgba(189, 168, 207, .07), transparent 72%),
+                linear-gradient(180deg, #0c1014 0%, var(--bg) 38%, #0b0e12 100%);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        html.light body {
+            background:
+                radial-gradient(1100px 620px at 10% -12%, rgba(14, 116, 144, .12), transparent 62%),
+                radial-gradient(920px 560px at 102% -6%, rgba(14, 116, 144, .10), transparent 64%),
+                linear-gradient(180deg, #f4f7fb 0%, var(--bg) 44%, #eaeff6 100%);
+        }
+
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, .022) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, .022) 1px, transparent 1px);
+            background-size: 58px 58px;
+            -webkit-mask-image: radial-gradient(ellipse 92% 70% at 50% 0%, #000 0%, rgba(0, 0, 0, .35) 55%, transparent 82%);
+            mask-image: radial-gradient(ellipse 92% 70% at 50% 0%, #000 0%, rgba(0, 0, 0, .35) 55%, transparent 82%);
+            opacity: .6;
+        }
+        html.light body::after {
+            background-image:
+                linear-gradient(rgba(15, 23, 42, .030) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(15, 23, 42, .030) 1px, transparent 1px);
+            opacity: .55;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--top-band);
+            opacity: .92;
+            box-shadow: 0 0 22px rgba(78, 162, 174, .35);
+            pointer-events: none;
+            z-index: 200;
+        }
+        html.light body::before { opacity: .75; box-shadow: none; }
+
+        a { color: var(--accent-2); }
+        :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 8px; }
+        ::selection { background: rgba(111, 177, 203, .30); color: #ffffff; }
+        .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+        .app-shell { width: min(1160px, calc(100% - 32px)); margin: auto; padding: 18px 0 44px; position: relative; z-index: 1; }
+
+        .glass {
+            background: var(--panel-glass);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            backdrop-filter: saturate(160%) blur(16px);
+            -webkit-backdrop-filter: saturate(160%) blur(16px);
+        }
+
+        /* ---------- Topbar ---------- */
+        .topbar {
+            min-height: 66px;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 14px; padding: 11px 14px; border-radius: 18px;
+            position: sticky; top: 12px; z-index: 50;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; min-width: 0; text-decoration: none; color: inherit; }
+        .brand-mark {
+            width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; color: #06222a; flex-shrink: 0;
+            background: linear-gradient(140deg, #b6ebe6, #56b6bf 54%, #2b7280);
+            box-shadow: 0 0 26px rgba(78, 162, 174, .42), inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(6, 34, 42, .35);
+            overflow: hidden;
+        }
+        .brand-mark img { width: 34px; height: 34px; object-fit: contain; display: block; }
+        .brand-name { font-size: 14.5px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+        .studio-badge {
+            font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+            color: var(--accent-ink); background: var(--wash);
+            border: 1px solid rgba(111, 177, 203, .28); padding: 3px 7px; border-radius: 999px;
+        }
+        .brand-subtitle { margin-top: 2px; color: var(--muted); font-size: 11px; }
+        .top-actions { display: flex; align-items: center; gap: 8px; }
+
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 9px 15px; border-radius: var(--radius-sm); cursor: pointer;
+            font-size: 12px; font-weight: 700; letter-spacing: .02em; text-decoration: none;
+            border: 1px solid transparent; transition: .18s var(--ease); white-space: nowrap;
+        }
+        .btn-primary {
+            color: #06222a; background: linear-gradient(135deg, #b6ebe6, #56b6bf 58%, #2b7280);
+            box-shadow: 0 14px 34px -18px rgba(43, 114, 128, .95), inset 0 1px 0 rgba(255,255,255,.35);
+            border: none;
+        }
+        .btn-primary:hover { transform: translateY(-1px); filter: brightness(1.06); }
+        .btn-ghost { color: var(--text-soft); background: var(--inset); border-color: var(--border); }
+        .btn-ghost:hover { color: var(--text); border-color: var(--border-hover); background: var(--wash); transform: translateY(-1px); }
+
+        .icon-btn {
+            width: 38px; height: 38px; display: grid; place-items: center; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--inset); color: var(--muted);
+            cursor: pointer; transition: .18s var(--ease);
+        }
+        .icon-btn:hover { color: var(--accent-2); border-color: var(--border-hover); background: var(--wash); transform: translateY(-1px); }
+
+        /* ---------- Hero ---------- */
+        .page-hero { position: relative; overflow: hidden; padding: 46px 36px 40px; border-radius: 22px; margin-top: 18px; }
+        .page-hero::before { content: ""; position: absolute; width: 440px; height: 440px; right: -170px; top: -220px; background: radial-gradient(circle, rgba(78, 162, 174, .26), transparent 68%); pointer-events: none; }
+        .page-hero::after { content: ""; position: absolute; width: 240px; height: 240px; left: -120px; bottom: -150px; background: radial-gradient(circle, rgba(166, 228, 223, .12), transparent 68%); pointer-events: none; }
+        .page-hero > * { position: relative; z-index: 2; }
+        .eyebrow { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 14px; color: var(--accent-ink); background: var(--wash); border: 1px solid rgba(111, 177, 203, .26); font-size: 9.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; }
+        .eyebrow i { width: 6px; height: 6px; border-radius: 999px; background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); }
+        .page-hero h1 { margin: 0; font-size: clamp(30px, 3.6vw, 48px); line-height: 1.05; letter-spacing: -.045em; font-weight: 800; }
+        .gradient-text { background: linear-gradient(104deg, var(--text) 12%, var(--accent) 54%, var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .lead { max-width: 720px; margin: 15px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.78; }
+
+        /* ---------- Contact layout ---------- */
+        .contact-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 18px; margin-top: 22px; align-items: start; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+        .card { padding: 18px; border-radius: var(--radius); background: var(--panel-soft); border: 1px solid var(--border); box-shadow: var(--hairline); transition: .2s var(--ease); }
+        .card:hover { border-color: rgba(111, 177, 203, .30); transform: translateY(-2px); }
+        .card-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; color: var(--accent-ink); background: var(--wash); border: 1px solid rgba(111, 177, 203, .22); margin-bottom: 11px; }
+        .card h3 { margin: 0 0 5px; font-size: 13px; font-weight: 800; }
+        .card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+
+        .form-panel { padding: 24px; border-radius: var(--radius); background: var(--panel-soft); border: 1px solid var(--border); box-shadow: var(--hairline); }
+        .form-panel h2 { margin: 0 0 6px; font-size: 16px; font-weight: 800; }
+        .form-note {
+            display: flex; gap: 10px; align-items: flex-start;
+            margin: 0 0 18px; padding: 11px 12px; border-radius: 11px;
+            color: var(--text-soft); background: rgba(251, 191, 36, .07);
+            border: 1px solid rgba(251, 191, 36, .24); font-size: 11.5px; line-height: 1.65;
+        }
+        html.light .form-note { color: #78350f; }
+        .form-note svg { flex-shrink: 0; margin-top: 1px; color: var(--warning); }
+
+        .field { margin-bottom: 14px; }
+        .field label { display: block; margin-bottom: 6px; color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+        .field input, .field select, .field textarea {
+            width: 100%; color: var(--text); background: var(--inset);
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            padding: 11px 12px; font-size: 13px; font-family: inherit; outline: none;
+            transition: .18s var(--ease);
+        }
+        .field textarea { min-height: 130px; resize: vertical; line-height: 1.7; }
+        .field input::placeholder, .field textarea::placeholder { color: var(--muted-2); }
+        .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--border-hover); background: var(--wash); box-shadow: 0 0 0 3px var(--ring); }
+        .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .form-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+        .form-status { margin: 14px 0 0; padding: 12px 13px; border-radius: var(--radius-sm); font-size: 12px; line-height: 1.7; display: none; }
+        .form-status.show { display: block; }
+        .form-status.info { color: var(--accent-ink); background: var(--wash); border: 1px solid rgba(111, 177, 203, .24); }
+
+        .direct { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+        .direct h2 { margin: 0 0 8px; font-size: 15px; font-weight: 800; }
+        .direct p { margin: 0; color: var(--text-soft); font-size: 13px; line-height: 1.8; }
+        .direct .placeholder { font-family: "JetBrains Mono", monospace; color: var(--accent-ink); background: var(--wash); border: 1px dashed rgba(111, 177, 203, .34); padding: 2px 7px; border-radius: 7px; }
+
+        /* ---------- Footer ---------- */
+        .footer-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-top: 34px; padding: 16px 4px 2px; border-top: 1px solid var(--border); color: var(--muted-2); font-size: 11px; }
+        .footer-brand-block { display: flex; flex-direction: column; gap: 3px; }
+        .footer-brand { color: var(--muted); font-weight: 800; letter-spacing: .1em; text-transform: uppercase; font-size: 10px; }
+        .footer-tag { font-size: 10.5px; }
+        .footer-nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+        .footer-nav a { color: var(--muted); text-decoration: none; font-size: 11.5px; font-weight: 600; transition: .16s var(--ease); }
+        .footer-nav a:hover, .footer-nav a:focus-visible { color: var(--accent-2); }
+        .footer-nav a[aria-current="page"] { color: var(--accent-ink); }
+
+        .fade-in { animation: fadeIn .45s var(--ease) both; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        @media (max-width: 900px) {
+            .contact-layout { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 700px) {
+            .app-shell { width: calc(100% - 18px); padding-top: 8px; }
+            .topbar { top: 6px; border-radius: 14px; padding: 10px 11px; }
+            .brand-subtitle, .studio-badge { display: none; }
+            .page-hero { padding: 30px 20px 28px; border-radius: 18px; }
+            .form-panel { padding: 18px; }
+            .field-row { grid-template-columns: 1fr; }
+            .footer-bar { flex-direction: column; align-items: flex-start; }
+        }
+        @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+    </style>
+</head>
+
+<body>
+
+<div class="app-shell">
+
+    <header class="topbar glass">
+        <a class="brand" href="/">
+            <span class="brand-mark"><img src="/tiix-logo-symbol.png" alt=""></span>
+            <span>
+                <span class="brand-name">TIIX SQL <span class="studio-badge">Studio</span></span>
+                <span class="brand-subtitle" style="display:block">Natural language database intelligence</span>
+            </span>
+        </a>
+        <div class="top-actions">
+            <a class="btn btn-ghost" href="/">Open Studio</a>
+            <button id="themeToggle" class="icon-btn" type="button" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+                <svg id="themeIcon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main>
+
+        <section class="page-hero glass fade-in">
+            <span class="eyebrow"><i></i>Get in touch</span>
+            <h1>Contact <span class="gradient-text">TIIX SQL Studio</span></h1>
+            <p class="lead">
+                Have a question, an idea, or something that is not working as expected?
+                This page explains the best way to reach us for each kind of message.
+            </p>
+        </section>
+
+        <div class="contact-layout">
+
+            <section aria-labelledby="topics-title">
+                <h2 id="topics-title" style="margin:0 0 12px; font-size:16px; font-weight:800;">What you can contact us about</h2>
+                <div class="grid">
+                    <article class="card">
+                        <div class="card-icon">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M8.2 15.8 3 21m2.8-9.9a6.5 6.5 0 1 1 9.2 9.2m-9.2-9.2L3 8.4 8.4 3l2.7 2.7m-3.3 5.4 4.4-4.4"/></svg>
+                        </div>
+                        <h3>General questions</h3>
+                        <p>How TIIX works, what it can do with your data, and whether it fits your setup.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-icon">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/></svg>
+                        </div>
+                        <h3>Feedback</h3>
+                        <p>Tell us what worked well or what felt confusing, so the experience can improve.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-icon">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M8 2 5 6v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6l-3-4H8Zm0 0v4h8m-8 6h8m-8 4h5"/></svg>
+                        </div>
+                        <h3>Bug reports</h3>
+                        <p>Describe what you did, what you expected, and what happened instead.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-icon">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M9 18h6m-5 3h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V18h6v-1.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2Z"/></svg>
+                        </div>
+                        <h3>Product suggestions</h3>
+                        <p>Ideas for new capabilities, better explanations, or a smoother workflow.</p>
+                    </article>
+                    <article class="card">
+                        <div class="card-icon">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm-4-7v2m0 14v2a6 6 0 0 0 6-6h-2"/></svg>
+                        </div>
+                        <h3>Partnerships &amp; collaboration</h3>
+                        <p>If you would like to collaborate, integrate or explore a partnership, get in touch.</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="form-panel" aria-labelledby="form-title">
+                <h2 id="form-title">Send a message</h2>
+                <p class="form-note" role="note">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+                    <span>This form is a front-end preview only. This deployment is not connected to a mail service, so submitting it does not send a message. Please use the contact address below.</span>
+                </p>
+
+                <form id="contactForm" novalidate>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="contactName">Your name</label>
+                            <input id="contactName" name="name" type="text" autocomplete="name" placeholder="Jane Doe">
+                        </div>
+                        <div class="field">
+                            <label for="contactEmail">Reply email</label>
+                            <input id="contactEmail" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="contactTopic">Topic</label>
+                        <select id="contactTopic" name="topic">
+                            <option value="general">General question</option>
+                            <option value="feedback">Feedback</option>
+                            <option value="bug">Bug report</option>
+                            <option value="suggestion">Product suggestion</option>
+                            <option value="partnership">Partnership / collaboration</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="contactMessage">Message</label>
+                        <textarea id="contactMessage" name="message" placeholder="How can we help?" required></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit">Submit message</button>
+                    </div>
+
+                    <p id="contactStatus" class="form-status info" role="status" aria-live="polite"></p>
+                </form>
+
+                <div class="direct">
+                    <h2>Or contact us directly</h2>
+                    <p>
+                        Email: <span class="placeholder" id="contactEmailPlaceholder">[CONTACT EMAIL]</span><br>
+                        Replace this placeholder with the project's real contact address before publishing.
+                    </p>
+                </div>
+            </section>
+
+        </div>
+
+    </main>
+
+    <footer class="footer-bar">
+        <div class="footer-brand-block">
+            <span class="footer-brand">TIIX SQL Studio</span>
+            <span class="footer-tag">AI-powered database exploration</span>
+        </div>
+        <nav class="footer-nav" aria-label="Information">
+            <a href="/about">About</a>
+            <a href="/contact" aria-current="page">Contact</a>
+            <a href="/privacy">Privacy</a>
+        </nav>
+    </footer>
+
+</div>
+
+<script>
+    function themeIconSvg(light) {
+        return light
+            ? '<path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 3v2m0 14v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M3 12h2m14 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" />'
+            : '<path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />';
+    }
+
+    function syncThemeIcon() {
+        var icon = document.getElementById("themeIcon");
+        if (icon) {
+            icon.innerHTML = themeIconSvg(document.documentElement.classList.contains("light"));
+        }
+    }
+
+    function toggleTheme() {
+        var root = document.documentElement;
+        root.classList.toggle("light");
+        var theme = root.classList.contains("light") ? "light" : "dark";
+        try { localStorage.setItem("tiix-theme", theme); } catch (e) {}
+        syncThemeIcon();
+    }
+
+    syncThemeIcon();
+
+    // Front-end only. This deployment has no mail transport, so the form
+    // validates locally and tells the visitor the truth: nothing was sent.
+    var contactForm = document.getElementById("contactForm");
+    var contactStatus = document.getElementById("contactStatus");
+
+    if (contactForm) {
+        contactForm.addEventListener("submit", function (event) {
+            event.preventDefault();
+
+            var email = document.getElementById("contactEmail");
+            var message = document.getElementById("contactMessage");
+
+            if (!email.value.trim() || email.value.indexOf("@") === -1) {
+                email.focus();
+                contactStatus.textContent =
+                    "Please enter a valid reply email address. Nothing was sent.";
+                contactStatus.classList.add("show");
+                return;
+            }
+
+            if (!message.value.trim()) {
+                message.focus();
+                contactStatus.textContent =
+                    "Please enter a message. Nothing was sent.";
+                contactStatus.classList.add("show");
+                return;
+            }
+
+            contactStatus.textContent =
+                "This preview form is not connected to a mail service, so your "
+                + "message was not sent. Please contact us at [CONTACT EMAIL].";
+            contactStatus.classList.add("show");
+        });
+    }
+</script>
+
+</body>
+</html>

@@ -424,22 +424,31 @@ def test_ask_is_blocked_before_the_provider_is_called(
         assert len(calls) == limit
 
 
-def test_ask_still_returns_401_before_the_limiter(
+def test_an_exhausted_visitor_is_refused_before_the_limiter(
     meta_paths, app_secret, monkeypatch
 ):
-    """An unauthenticated caller is rejected by auth, so it never
-    consumes an authenticated bucket."""
+    """The trial gate runs first, so a spent allowance never touches a
+    bucket and never reaches the provider."""
 
     monkeypatch.setattr(
         "app.main.ask_active",
         lambda prompt, turns, request_id=None, generation=None: ("SELECT 1", "ok"),
     )
 
-    with TestClient(app) as anon:
-        for _ in range(config.ASK_RATE_LIMIT_REQUESTS * 2):
-            assert anon.post(
+    with TestClient(app) as visitor:
+
+        for _ in range(config.TRIAL_MAX_ATTEMPTS):
+            assert visitor.post(
                 "/api/ask", json={"prompt": "x"}
-            ).status_code == 401
+            ).status_code == 200
+
+        # Isolate what the refused request does to the limiter.
+        ratelimit.limiter.reset()
+
+        blocked = visitor.post("/api/ask", json={"prompt": "x"})
+
+        assert blocked.status_code == 403
+        assert blocked.json()["detail"] == "FREE_TRIAL_EXHAUSTED"
 
     assert ratelimit.limiter._buckets == {}
 
@@ -679,17 +688,31 @@ def test_disabling_the_limiter_bypasses_it(
 def test_kill_switch_does_not_weaken_authentication(
     meta_paths, app_secret, monkeypatch, stub_provider
 ):
-    """Disabling the limiter must never open the API."""
+    """Disabling the limiter must never open the API.
+
+    Two independent budgets guard /api/ask - the per-client limiter and
+    the visitor's free attempts - and switching the first off may leave
+    the second standing. It also leaves the owner surface untouched.
+    """
 
     monkeypatch.setattr(
         config, "APP_RATE_LIMIT_ENABLED", False
     )
 
     with TestClient(app) as anon:
+
+        assert anon.get("/api/schema").status_code == 401
+        assert anon.get("/api/sessions").status_code == 401
+
+        # Unbounded by the limiter, but not by the trial counter.
+        for _ in range(config.TRIAL_MAX_ATTEMPTS):
+            assert anon.post(
+                "/api/ask", json={"prompt": "x"}
+            ).status_code == 200
+
         assert anon.post(
             "/api/ask", json={"prompt": "x"}
-        ).status_code == 401
-        assert anon.get("/api/schema").status_code == 401
+        ).status_code == 403
 
 
 # ============================================================

@@ -1059,8 +1059,11 @@ def test_authentication_still_precedes_the_limiter(
     monkeypatch.setattr(ratelimit.limiter, "allow", spy)
 
     with TestClient(app) as anon:
+
+        # A route that is both guarded and limited: /api/report. The
+        # guard answers first, so the counter is never consulted.
         assert anon.post(
-            "/api/ask", json={"prompt": "x"}
+            "/api/report", json={"title": "t"}
         ).status_code == 401
 
     assert seen == []
