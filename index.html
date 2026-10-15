@@ -172,9 +172,10 @@
         }
         .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .brand-mark {
-            width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; color: #06222a; flex-shrink: 0;
-            background: linear-gradient(140deg, #b6ebe6, #56b6bf 54%, #2b7280);
-            box-shadow: 0 0 26px rgba(78, 162, 174, .42), inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(6, 34, 42, .35);
+            width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; flex-shrink: 0;
+            background: radial-gradient(130% 130% at 32% 16%, rgba(111, 177, 203, .20), rgba(10, 13, 17, .94) 66%);
+            border: 1px solid rgba(111, 177, 203, .28);
+            box-shadow: 0 0 22px rgba(78, 162, 174, .36), inset 0 1px 0 rgba(255, 255, 255, .06);
             overflow: hidden;
         }
         .brand-mark img { width: 34px; height: 34px; object-fit: contain; display: block; }
@@ -208,15 +209,6 @@
             cursor: pointer; transition: .18s var(--ease);
         }
         .icon-btn:hover { color: var(--accent-2); border-color: var(--border-hover); background: var(--wash); transform: translateY(-1px); }
-        .avatar {
-            width: 38px; height: 38px; border-radius: var(--radius-sm); display: grid; place-items: center;
-            overflow: hidden;
-            background: linear-gradient(140deg, #b6ebe6, #56b6bf);
-            border: 1px solid rgba(166, 228, 223, .30);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,.45);
-        }
-        .avatar img { width: 30px; height: 30px; object-fit: contain; display: block; }
-
         /* ---------- Workspace ---------- */
         .workspace { display: grid; grid-template-columns: 292px minmax(0, 1fr); gap: 18px; margin-top: 18px; align-items: start; }
         .sidebar { padding: 16px 14px; border-radius: var(--radius); position: sticky; top: 96px; max-height: calc(100vh - 116px); overflow-y: auto; }
@@ -657,7 +649,6 @@
                     <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M15 17l5-5-5-5m5 5H9m3 8H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" />
                 </svg>
             </button>
-            <div class="avatar" title="TIIX SQL Studio"><img src="/tiix-logo-symbol.png" alt="TIIX"></div>
         </div>
     </header>
 
