@@ -135,12 +135,7 @@ def traced_execution(monkeypatch):
 def stub_ask(sql=STORE_SQL, provider="nvidia", model="stub-model-1"):
     """A provider stand-in that fills the GenerationRef like a real one."""
 
-    def fake_ask(
-        prompt,
-        turns,
-        request_id=None,
-        generation=None,
-    ):
+    def fake_ask(prompt, turns, request_id=None, generation=None, database_path=None, **_):
         if generation is not None:
             generation.record(provider, model)
 
@@ -680,7 +675,7 @@ def test_a_real_provider_fills_the_generation_ref(monkeypatch):
             '"explanation": "All products."}'
         ),
     )
-    monkeypatch.setattr(llm, "inspect_database", lambda: {})
+    monkeypatch.setattr(llm, "inspect_database", lambda *a, **k: {})
     monkeypatch.setattr(
         llm, "build_system_instruction", lambda schema: "be brief"
     )
@@ -704,7 +699,7 @@ def test_a_failed_generation_leaves_the_ref_empty(monkeypatch):
 
     monkeypatch.setattr(llm, "NVIDIA_API_KEY", "test-only-key")
     monkeypatch.setattr(provider, "_call_model", refuse)
-    monkeypatch.setattr(llm, "inspect_database", lambda: "")
+    monkeypatch.setattr(llm, "inspect_database", lambda *a, **k: "")
 
     with pytest.raises(Exception):
         provider.generate("Show me products", [], generation=ref)
@@ -725,7 +720,7 @@ def test_a_gemini_provider_fills_the_generation_ref(monkeypatch):
     monkeypatch.setattr(
         provider, "_call_model", lambda *args: Response()
     )
-    monkeypatch.setattr(llm, "inspect_database", lambda: {})
+    monkeypatch.setattr(llm, "inspect_database", lambda *a, **k: {})
     monkeypatch.setattr(
         llm, "build_system_instruction", lambda schema: "be brief"
     )

@@ -15,6 +15,14 @@ import app.config as config
 
 from app import correctness  # noqa: E402
 
+# One definition of "which column is a number" for the whole app.
+# app.analytics owns it; the PDF report consumes the same helpers
+# the interactive chart planner uses, so the two cannot drift.
+from app.analytics import (  # noqa: E402
+    numeric_columns as _numeric_columns,
+    numeric_series as _numeric_series,
+)
+
 from reportlab.lib import colors  # noqa: E402
 from reportlab.lib.pagesizes import A4  # noqa: E402
 from reportlab.lib.styles import ParagraphStyle  # noqa: E402
@@ -61,40 +69,56 @@ def _report_dir(output_dir=None):
     return directory
 
 
-def _numeric_columns(data):
-    if not data:
-        return []
-    first = data[0]
-    return [
-        key
-        for key, value in first.items()
-        if isinstance(value, (int, float)) and not isinstance(value, bool)
-    ]
-
-
 def _bar_chart_drawing(data, label_column, numeric_column, limit=14):
-    """Native reportlab bar chart returned as a Flowable Drawing."""
+    """Native reportlab bar chart returned as a Flowable Drawing.
 
-    rows = data[:limit]
+    Only actual result rows are drawn. A NULL or otherwise missing value
+    is omitted rather than plotted as zero, and the bars are scaled
+    against a baseline that includes zero so a negative value points
+    below the axis instead of being flipped into a positive bar.
+    """
+
+    series = _numeric_series(data, numeric_column)
+
+    if not series:
+        return None
 
     labels = []
     values = []
 
-    for index, row in enumerate(rows, start=1):
-        values.append(float(row[numeric_column]))
+    for index, (row, value) in enumerate(
+        zip(data[:limit], series[:limit]), start=1
+    ):
+
+        if value is None:
+            continue
+
         if label_column:
-            labels.append(str(row[label_column])[:16])
+            labels.append(str(row.get(label_column, ""))[:16])
         else:
             labels.append(f"#{index}")
+
+        values.append(value)
+
+    if not values:
+        return None
 
     width, height = 460, 210
     left, right, top, bottom = 46, 10, 18, 34
     plot_width = width - left - right
     plot_height = height - top - bottom
 
-    maximum = max(values) if values else 1
-    if maximum == 0:
-        maximum = 1
+    maximum = max(values + [0.0])
+    minimum = min(values + [0.0])
+    span = maximum - minimum
+
+    if span <= 0:
+        span = 1.0
+
+    def y_for(value):
+        return bottom + ((value - minimum) / span) * plot_height
+
+    baseline = y_for(0.0)
 
     count = len(values)
     slot = plot_width / max(count, 1)
@@ -112,7 +136,8 @@ def _bar_chart_drawing(data, label_column, numeric_column, limit=14):
     for step in range(5):
 
         fraction = step / 4.0
-        y = bottom + fraction * plot_height
+        value = minimum + fraction * span
+        y = y_for(value)
 
         drawing.add(
             Line(
@@ -124,7 +149,7 @@ def _bar_chart_drawing(data, label_column, numeric_column, limit=14):
         drawing.add(
             String(
                 left - 6, y - 2.5,
-                str(round(maximum * fraction, 1)),
+                str(round(value, 1)),
                 fontSize=7.5, textAnchor="end",
                 fillColor=_TEXT_COLOR,
             )
@@ -133,19 +158,24 @@ def _bar_chart_drawing(data, label_column, numeric_column, limit=14):
     for index, (label, value) in enumerate(zip(labels, values)):
 
         x0 = left + index * slot + (slot - bar_width) / 2
-        bar_height = max((value / maximum) * plot_height, 0.6)
+        y = y_for(value)
+        bar_height = abs(y - baseline)
+        bar_bottom = min(y, baseline)
 
         drawing.add(
             Rect(
-                x0, bottom, bar_width, bar_height,
+                x0, bar_bottom, bar_width, bar_height,
                 fillColor=_BAR_COLOR, strokeColor=None,
             )
         )
 
         if bar_height > 10:
+
+            label_y = y + 2 if value >= 0 else bar_bottom - 8
+
             drawing.add(
                 String(
-                    x0 + bar_width / 2, bottom + bar_height + 2,
+                    x0 + bar_width / 2, label_y,
                     str(value), fontSize=6.5, textAnchor="middle",
                     fillColor=_TEXT_COLOR,
                 )
@@ -189,12 +219,12 @@ def _chart_flowable(data):
     return _bar_chart_drawing(data, label_column, column)
 
 
-def _results_table(data, cap_rows=100):
+def _results_table(data, cap_rows=2000):
 
     if not data:
         return None
 
-    rows = data[:cap_rows]
+    rows = data[:cap_rows] if cap_rows else data
 
     headers = list(rows[0].keys())
 
@@ -212,6 +242,8 @@ def _results_table(data, cap_rows=100):
                 for column in headers
             ]
         )
+
+    return table_data, rows
 
     table = Table(table_data, repeatRows=1)
 
@@ -442,11 +474,46 @@ def build_report_pdf(
         )
     )
 
-    table = _results_table(data)
+    table_result = _results_table(data)
+    table = None
+    table_rows = []
+    if table_result:
+        table_data, table_rows = table_result
+        if table_data:
+            table = Table(table_data, repeatRows=1)
+            table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E293B")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTSIZE", (0, 0), (-1, -1), 8),
+                        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [
+                            colors.white,
+                            colors.HexColor("#F1F5F9"),
+                        ]),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ]
+                )
+            )
 
     if table:
         flowables.append(Spacer(1, 4 * mm))
         flowables.append(table)
+        # Indicate subset included if table truncated relative to data/count
+        if len(table_rows) < len(data) or (count and len(table_rows) < count and len(table_rows) < len(data)):
+            pass  # no extra text in table section; results line already covers count/truncated
+
+    # Clarify table contents if we show fewer than count indicates
+    shown = len(table_rows) if 'table_rows' in locals() else 0
+    if shown > 0 and count and shown < count:
+        flowables.append(
+            Paragraph(
+                f"Showing first {shown} row{'s' if shown != 1 else ''} in table",
+                body_style,
+            )
+        )
 
     chart = _chart_flowable(data)
 

@@ -71,7 +71,7 @@ from app.llm import (
     ask_active,
     get_provider,
 )
-from app import correctness, provenance
+from app import analytics, correctness, provenance
 from app.ratelimit import (
     APPROVAL_RATE_LIMIT_REQUESTS,
     APPROVAL_RATE_LIMIT_WINDOW_SECONDS,
@@ -257,6 +257,11 @@ class QueryRequest(BaseModel):
     history: List[HistoryTurn] = Field(default_factory=list)
     session_id: Optional[str] = None
 
+    # Optional sandbox selection. When set, the named stored import is
+    # inspected, queried and reported on instead of the default
+    # application database. Absent means the default, unchanged.
+    import_id: Optional[str] = None
+
 
 class SessionCreate(BaseModel):
     title: str = "New session"
@@ -286,6 +291,11 @@ class ReportRequest(BaseModel):
     source_database: str = ""
     source_sha256: str = ""
     model: str = ""
+
+    # Optional sandbox selection, echoed from the /api/ask call the
+    # report was made from. When set, the report is built from the
+    # selected import's schema rather than the default database's.
+    import_id: str = ""
 
 
 class AuthLogin(BaseModel):
@@ -597,7 +607,7 @@ def health():
 # VERSION / SCHEMA (PROTECTED: attached to the guarded router)
 # ============================================================
 
-def _schema_payload(request):
+def _schema_payload(request, import_id=None):
     """The read-only schema body, shared by both schema routes.
 
     get_schema() returns table, column and foreign-key metadata only:
@@ -605,12 +615,33 @@ def _schema_payload(request):
     is what makes the /api/public/schema copy below safe to serve to a
     visitor - the frontend cannot build a prompt without it, so serving
     it is what removes the sign-in from the first page load.
+
+    import_id selects a stored sandbox import to describe instead of the
+    default database. It is only honoured on the guarded /api/schema
+    route: the public copy is deliberately left describing the shipped
+    database, so an uploaded schema is never served without a credential.
     """
+
+    database_path = None
+
+    if import_id:
+
+        # Resolved here rather than passed through: a malformed,
+        # escaping or unknown id must fail, never quietly describe the
+        # default database instead.
+        try:
+            database_path = uploads.resolve_import_path(import_id)
+
+        except uploads.ImportNotFound:
+            raise HTTPException(
+                status_code=404,
+                detail="Import not found.",
+            ) from None
 
     try:
 
         return {
-            "schema": get_schema()
+            "schema": get_schema(database_path)
         }
 
     except Exception as exc:
@@ -645,9 +676,9 @@ def version():
 
 
 @api.get("/schema")
-def schema(request: Request):
+def schema(request: Request, import_id: Optional[str] = None):
 
-    return _schema_payload(request)
+    return _schema_payload(request, import_id=import_id)
 
 
 # The same body, without the guard. Kept as a separate path rather than
@@ -741,6 +772,18 @@ def ask_ai(payload: QueryRequest, request: Request):
 
     try:
 
+        # Resolve a selected sandbox before anything is charged: an
+        # unknown, malformed or escaping import_id is answered as an
+        # error and must not consume a free attempt or reach a provider.
+        # None means "not selected", which keeps the default database.
+        database_path = None
+
+        if payload.import_id:
+
+            database_path = uploads.resolve_import_path(
+                payload.import_id
+            )
+
         if session_id:
 
             stored_turns = history.build_history_turns(session_id)
@@ -768,20 +811,32 @@ def ask_ai(payload: QueryRequest, request: Request):
         # the charge.
         access.charge_trial_attempt(request)
 
-        generated_sql, explanation = ask_active(
-            prompt,
-            turns,
+        # database_path is passed only when an import was selected, so
+        # every existing caller and test double of ask_active keeps its
+        # current signature and the no-import path is byte-for-byte the
+        # previous behaviour.
+        ask_kwargs = {
 
             # Opaque correlation id only. The LLM layer logs it with the
             # token counts and never uses it as a key or a limit. The
             # same value is reused in the provenance block below: one
             # request, one id.
-            request_id=observability.request_id_of(request),
-            generation=generation,
+            "request_id": observability.request_id_of(request),
+            "generation": generation,
+        }
+
+        if database_path is not None:
+            ask_kwargs["database_path"] = database_path
+
+        generated_sql, explanation = ask_active(
+            prompt,
+            turns,
+            **ask_kwargs,
         )
 
         data, execution = execute_sql_with_metadata(
-            generated_sql
+            generated_sql,
+            path=database_path,
         )
 
         if session_id:
@@ -806,6 +861,14 @@ def ask_ai(payload: QueryRequest, request: Request):
             "data": data,
             "count": len(data),
             "truncated": execution.truncated,
+
+            # Additive: a chart plan derived from the ACTUAL rows
+            # above, or null when no chart fits the result shape.
+            # It plots only columns the rows contain, keeps a NULL a
+            # gap and a negative value negative, and never invents a
+            # point. Planning cannot raise on a well-formed result,
+            # so it cannot fail a query that already succeeded.
+            "chart": analytics.plan_chart(data, generated_sql),
 
             # Additive: everything above is unchanged. Describes how the
             # rows were produced; says nothing about whether they answer
@@ -837,6 +900,15 @@ def ask_ai(payload: QueryRequest, request: Request):
     except HTTPException:
 
         raise
+
+    except uploads.ImportNotFound:
+
+        # A well-formed id that matches no stored import: a clear 404.
+        # The default database is never substituted.
+        raise HTTPException(
+            status_code=404,
+            detail="Import not found.",
+        ) from None
 
     except LLMConcurrencySaturated:
 
@@ -1137,6 +1209,35 @@ def generate_report(
     payload: ReportRequest, request: Request
 ):
 
+    # The report's schema section describes the same source the rows came
+    # from, so a selected import is resolved the same way /api/ask
+    # resolves it. An unknown id fails rather than describing the
+    # default database.
+    database_path = None
+
+    if payload.import_id:
+
+        try:
+
+            database_path = uploads.resolve_import_path(
+                payload.import_id
+            )
+
+        except uploads.ImportNotFound:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Import not found.",
+            ) from None
+
+        except Exception as exc:
+
+            # A malformed or escaping id is a hand-written
+            # ValidationError (400); anything else is sanitised.
+            raise observability.sanitized_http_exception(
+                exc, request
+            ) from None
+
     try:
 
         path = build_report_pdf(
@@ -1147,7 +1248,7 @@ def generate_report(
             data=payload.data,
             count=payload.count,
             truncated=payload.truncated,
-            schema_text=get_schema(),
+            schema_text=get_schema(database_path),
             source_database=provenance.source_database(
                 payload.source_database
             ),

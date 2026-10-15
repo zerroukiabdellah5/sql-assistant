@@ -415,3 +415,6 @@ the Vercel deployment configuration.
 
 No license file is present in this repository. No license is currently
 specified; all rights are reserved by the author unless a license is added.
+
+
+**Uploads:** Uploaded files are processed in a sandbox and selectable via import_id. Supported formats: .db/.sqlite/.sqlite3, .sql, .xlsx, .csv. Uploads are temporary (Vercel: /tmp/uploads) and not isolated per user (instance-wide, ephemeral). PostgreSQL, MySQL/MariaDB, Oracle, and remote DB connections are not supported yet.

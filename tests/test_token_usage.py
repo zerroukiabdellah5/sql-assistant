@@ -1092,10 +1092,11 @@ def test_the_module_documents_that_it_enforces_nothing():
 def test_the_llm_layer_takes_no_usage_parameter():
     """ask_active keeps optional inputs and nothing about budgets.
 
-    The two optional parameters are the correlation id, which is
-    logged and nothing else, and the GenerationRef the provider fills
-    in with its own name and model. Neither can cap spending, and
-    neither is a usage parameter.
+    The optional parameters are the correlation id, which is logged and
+    nothing else, the GenerationRef the provider fills in with its own
+    name and model, and the database path whose schema drives the
+    prompt. None of them can cap spending and none is a usage
+    parameter.
     """
 
     import inspect
@@ -1107,12 +1108,16 @@ def test_the_llm_layer_takes_no_usage_parameter():
         "history",
         "request_id",
         "generation",
+        "database_path",
     ]
     assert (
         signature.parameters["request_id"].default is None
     )
     assert (
         signature.parameters["generation"].default is None
+    )
+    assert (
+        signature.parameters["database_path"].default is None
     )
 
 

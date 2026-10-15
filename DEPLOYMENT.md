@@ -240,3 +240,5 @@ Confirm against Vercel's documentation before relying on these:
 - Memory and CPU sizing for a 25 MB buffered upload plus ReportLab
   rendering.
 - Cold-start latency from importing the provider SDKs.
+
+**Database support:** Only SQLite (.db/.sqlite/.sqlite3) and uploaded sandbox data are supported. PostgreSQL, MySQL/MariaDB, Oracle, and remote database connections are not supported yet. Uploads (.sql, .xlsx, .csv) are temporary (Vercel /tmp/uploads), instance-wide (not per-user), and used read-only.

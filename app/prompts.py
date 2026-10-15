@@ -6,6 +6,7 @@
 # hard-coded to a specific store schema.
 # ============================================================
 
+from app import metrics
 from app.config import (
     MAX_HISTORY_FIELD_CHARS,
     MAX_HISTORY_TURNS,
@@ -137,6 +138,8 @@ def build_system_instruction(schema):
         else "- None detected. Join only via columns that clearly match."
     )
 
+    metrics_block = metrics.describe_for_prompt(schema)
+
     return f"""
 You are a Text-to-SQL engine with conversational memory.
 
@@ -156,6 +159,10 @@ RELATIONSHIPS (foreign keys detected in this database):
 
 {relationships_block}
 
+BUSINESS METRICS (definitions detected in this database):
+
+{metrics_block}
+
 OUTPUT FORMAT:
 
 Return a JSON object with exactly these keys:
@@ -174,6 +181,15 @@ STRICT RULES:
 - Use conversation history to resolve follow-ups such as "them", "those products", "how many were ordered", or "break that down".
 - If a follow-up refers to a previous result, keep the same filters and joins, then add the new aggregation, join, or projection.
 - The explanation must describe the SQL, not repeat the user's wording verbatim.
+
+METRIC AND NUMBER RULES:
+
+- Compute revenue, cost, profit, stock and any ratio only from the definitions listed under BUSINESS METRICS and only from columns that exist in the schema.
+- Never invent a price, a cost, a date or a quantity. If a column the metric needs is not in the schema, do not approximate it and never substitute a literal such as 0.
+- If the request asks for a metric that is listed as unavailable, do not write SQL that fakes it. Answer with a SELECT that is still valid and state plainly in the explanation that the available data does not support that metric.
+- SUM, AVG, MIN and MAX ignore NULL rows; a NULL is not a zero. Do not wrap a column in IFNULL/COALESCE to turn NULL into 0 for an aggregate.
+- Guard every division against zero (for example NULLIF(denominator, 0) or a CASE) so a ratio yields NULL rather than an error or a misleading zero.
+- Do not group by a date or time unless a date column is listed as available above.
 
 Examples:
 

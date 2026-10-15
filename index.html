@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TIIX SQL Studio â€” Natural Language to SQL</title>
+    <title>TIIX SQL Studio — Natural Language to SQL</title>
     <meta name="description" content="TIIX SQL Studio: turn plain English into read-only SQLite queries, inspect the SQL, see where every result came from, and explore results with automatic visualizations.">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -379,6 +379,10 @@
         #dataOutput tbody tr:hover td { background: var(--wash); }
         #dataOutput tbody tr:last-child td { border-bottom: 0; }
         .chart-panel { margin-top: 12px; padding: 15px; border-radius: 13px; background: var(--panel-soft); border: 1px solid var(--border); box-shadow: var(--hairline); }
+        .chart-kpi { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 30px 16px; border-radius: 11px; background: var(--inset); border: 1px solid var(--border); box-shadow: var(--hairline); }
+        .chart-kpi-value { color: var(--text); font-family: "JetBrains Mono", monospace; font-size: 34px; font-weight: 700; letter-spacing: -.02em; overflow-wrap: anywhere; text-align: center; }
+        .chart-kpi-label { color: var(--muted-2); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+        .chart-note { margin: 10px 0 0; color: var(--muted-2); font-size: 10.5px; line-height: 1.5; }
 
         /* ---------- Provenance: where the rows came from ---------- */
         .provenance { margin-top: 12px; padding: 15px; border-radius: 13px; background: var(--panel-soft); border: 1px solid var(--border); box-shadow: var(--hairline); }
@@ -467,6 +471,11 @@
         .ws-row-title { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .ws-row-sub { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; margin-top: 3px; }
         .ws-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .ws-source { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .ws-select { max-width: 260px; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--panel-soft); color: var(--text-soft); font-family: "JetBrains Mono", monospace; font-size: 10px; cursor: pointer; }
+        .ws-select:focus { outline: none; border-color: var(--border-hover); }
+        .ws-source-tag { padding: 4px 8px; border-radius: 999px; font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--success); background: rgba(53, 214, 160, .1); border: 1px solid rgba(53, 214, 160, .24); white-space: nowrap; }
+        .ws-source-tag.is-import { color: var(--warning); background: rgba(251, 191, 36, .08); border-color: rgba(251, 191, 36, .24); }
         .ws-upload-zone { border: 1.5px dashed var(--border-strong); border-radius: 13px; padding: 14px; background: var(--inset); transition: .18s var(--ease); }
         .ws-upload-zone:hover { border-color: var(--border-hover); }
         .ws-file-input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-soft); color: var(--text-soft); font-size: 12px; }
@@ -629,18 +638,18 @@
         </div>
 
         <div class="top-actions">
-            <button class="palette-trigger" onclick="openCommandPalette()" title="Command palette â€” Ctrl + K">
+            <button class="palette-trigger" onclick="openCommandPalette()" title="Command palette — Ctrl + K">
                 <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
-                <span>Search actionsâ€¦</span>
+                <span>Search actions…</span>
                 <span class="keyboard-key">Ctrl K</span>
             </button>
             <div class="engine-pill"><span class="engine-dot"></span>SQLite Engine Active</div>
-            <button id="themeToggle" class="icon-btn" onclick="toggleTheme()" title="Toggle theme â€” Ctrl + Shift + L" aria-label="Toggle theme">
+            <button id="themeToggle" class="icon-btn" onclick="toggleTheme()" title="Toggle theme — Ctrl + Shift + L" aria-label="Toggle theme">
                 <svg id="themeIcon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
                 </svg>
             </button>
-            <button class="icon-btn" onclick="openCommandPalette()" title="Command palette â€” Ctrl + K" aria-label="Open command palette">
+            <button class="icon-btn" onclick="openCommandPalette()" title="Command palette — Ctrl + K" aria-label="Open command palette">
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
             </button>
             <button id="signOutBtn" class="icon-btn" onclick="signOut()" title="Sign out" aria-label="Sign out">
@@ -673,7 +682,7 @@
         <aside class="sidebar glass">
             <div class="sidebar-heading">
                 <span class="section-label">Database Explorer</span>
-                <span class="mini-badge">SQLite Â· Live</span>
+                <span class="mini-badge">SQLite · Live</span>
             </div>
 
             <div class="db-card">
@@ -683,7 +692,7 @@
                     </div>
                     Local Database
                 </div>
-                <div class="db-meta mono">store.db<br>live schema via /api/public/schema Â· relational</div>
+                <div class="db-meta mono" id="dbMeta">store.db<br>live schema via /api/public/schema · relational</div>
             </div>
 
             <div class="sidebar-heading">
@@ -719,6 +728,13 @@
                     <span id="sessionBadge">LOCAL SESSION</span>
                 </div>
                 <div class="ws-actions">
+                    <div class="ws-source">
+                        <label class="sr-only" for="sourceSelect">Active data source</label>
+                        <select id="sourceSelect" class="ws-select" onchange="onSourceChange()" title="Active data source">
+                            <option value="">Default database (store.db)</option>
+                        </select>
+                        <span id="sourceTag" class="ws-source-tag" title="Active data source">Default DB</span>
+                    </div>
                     <button class="export-btn" onclick="openWorkspace('sessions')">Sessions</button>
                     <button class="export-btn secondary" onclick="openWorkspace('upload')">Upload</button>
                     <button class="export-btn secondary" onclick="openWorkspace('approvals')">Approvals</button>
@@ -739,13 +755,13 @@
                     <label class="sr-only" for="promptInput">Natural language query</label>
                     <textarea id="promptInput" rows="4" placeholder="Ask anything about your business data..."></textarea>
                     <div class="input-footer">
-                        <div class="input-hint">Plain English â†’ SQL â†’ Results</div>
+                        <div class="input-hint">Plain English → SQL → Results</div>
                         <div class="ai-indicator"><span class="ai-indicator-dot"></span>AI READY</div>
                     </div>
                 </div>
 
                 <div class="suggestions-title">Quick queries</div>
-                <div class="suggestions">
+                <div class="suggestions" id="quickQueries">
                     <button onclick="setQuery('Show me Nike products')" class="suggestion">Show me Nike products</button>
                     <button onclick="setQuery('How many of them were ordered?')" class="suggestion">How many were ordered?</button>
                     <button onclick="setQuery('Total quantity ordered per brand')" class="suggestion">Quantity per brand</button>
@@ -753,7 +769,7 @@
                 </div>
 
                 <div class="run-row">
-                    <div class="run-hint">Follow-ups reuse context â€” try â€œthemâ€, â€œsame brandâ€, â€œbreak that downâ€.</div>
+                    <div class="run-hint">Follow-ups reuse context — try “them”, “same brand”, “break that down”.</div>
                     <button id="runButton" onclick="sendQuery()">
                         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7"/></svg>
                         <span id="runButtonLabel">Generate SQL &amp; Run</span>
@@ -765,7 +781,7 @@
                 <div class="panel-header">
                     <div>
                         <div class="panel-title">Generated SQLite Query</div>
-                        <div class="panel-sub">Read it before you rely on it â€” copy or clear anytime.</div>
+                        <div class="panel-sub">Read it before you rely on it — copy or clear anytime.</div>
                     </div>
                     <span id="sqlStatus" class="status">Ready</span>
                 </div>
@@ -794,7 +810,7 @@
                 <div class="panel-header">
                     <div>
                         <div class="panel-title">Query Execution Results</div>
-                        <div class="panel-sub">Live output from the SQLite engine â€” these are the rows the query returned, not a confirmed answer</div>
+                        <div class="panel-sub">Live output from the SQLite engine — these are the rows the query returned, not a confirmed answer</div>
                     </div>
                     <div class="result-metrics">
                         <span id="resultMetric" class="metric">0 rows</span>
@@ -809,17 +825,19 @@
                             <div class="empty-state-icon">
                                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4-3.58 4-8 4-8-1.79-8-4Zm0 0v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7"/></svg>
                             </div>
-                            Click â€œGenerate SQL &amp; Runâ€ to execute a query.
+                            Click “Generate SQL &amp; Run” to execute a query.
                         </div>
                     </div>
                 </div>
 
                 <div id="chartPanel" class="chart-panel hidden">
                     <div class="chart-head">
-                        <div class="panel-title">Automatic Visualization</div>
+                        <div id="chartTitle" class="panel-title">Automatic Visualization</div>
                         <button id="downloadChartButton" onclick="downloadChart()" class="export-btn secondary">Download Chart</button>
                     </div>
-                    <div class="relative h-64 md:h-80"><canvas id="resultsChart" role="img" aria-label="Automatic visualization of query results"></canvas></div>
+                    <div id="chartKpi" class="chart-kpi hidden"></div>
+                    <div id="chartCanvasWrap" class="relative h-64 md:h-80"><canvas id="resultsChart" role="img" aria-label="Automatic visualization of query results"></canvas></div>
+                    <p id="chartNote" class="chart-note hidden"></p>
                 </div>
 
                 <div id="provenancePanel" class="provenance hidden">
@@ -828,13 +846,13 @@
                         <span id="verificationBadge" class="provenance-badge">Not verified</span>
                     </div>
                     <dl class="provenance-grid">
-                        <div><dt>Source</dt><dd id="provSource">â€”</dd></div>
-                        <div><dt>Fingerprint</dt><dd id="provDigest" class="mono">â€”</dd></div>
-                        <div><dt>Written by</dt><dd id="provModel">â€”</dd></div>
-                        <div><dt>Executed</dt><dd id="provExecuted">â€”</dd></div>
-                        <div><dt>Duration</dt><dd id="provElapsed">â€”</dd></div>
-                        <div><dt>Rows</dt><dd id="provRows">â€”</dd></div>
-                        <div><dt>Request</dt><dd id="provRequestId" class="mono">â€”</dd></div>
+                        <div><dt>Source</dt><dd id="provSource">—</dd></div>
+                        <div><dt>Fingerprint</dt><dd id="provDigest" class="mono">—</dd></div>
+                        <div><dt>Written by</dt><dd id="provModel">—</dd></div>
+                        <div><dt>Executed</dt><dd id="provExecuted">—</dd></div>
+                        <div><dt>Duration</dt><dd id="provElapsed">—</dd></div>
+                        <div><dt>Rows</dt><dd id="provRows">—</dd></div>
+                        <div><dt>Request</dt><dd id="provRequestId" class="mono">—</dd></div>
                     </dl>
                     <p id="provenanceNote" class="provenance-note"></p>
                 </div>
@@ -892,13 +910,13 @@
             <button class="export-btn secondary" onclick="closeWorkspace(event, 'upload')">Close</button>
         </div>
         <div class="ws-upload-zone">
-            <label class="sr-only" for="uploadInput">Choose a database, SQL script or Excel file</label>
+            <label class="sr-only" for="uploadInput">Choose a database, SQL script, Excel or CSV file</label>
             <input id="uploadInput" class="ws-file-input" type="file"
-                   accept=".db,.sqlite,.sqlite3,.sql,.xlsx">
+                   accept=".db,.sqlite,.sqlite3,.sql,.xlsx,.csv">
             <button class="export-btn mt-4" onclick="handleUpload()">Import file</button>
-            <p class="ws-hint">Accepted: .db / .sqlite / .sqlite3 / .sql / .xlsx<br>
+            <p class="ws-hint">Accepted: .db / .sqlite / .sqlite3 / .sql / .xlsx / .csv<br>
                 Files are copied into an isolated sandbox. SQL scripts run only inside a
-                brand-new throwaway database â€” they can never touch store.db.</p>
+                brand-new throwaway database — they can never touch store.db.</p>
         </div>
         <div id="uploadResult" class="workspace-section"></div>
         <div class="workspace-section">
@@ -1262,8 +1280,8 @@
            nothing runs on page load. */
         function handleAuthFailure(response) {
 
-            if (response.status === 401) {
 
+            if (response.status === 401) {
                 showSignIn();
                 return true;
 
@@ -1298,9 +1316,21 @@
     let lastQueryTime = null;
     let lastProvenance = null;
     let lastVerification = null;
+    let lastChart = null;
+    let lastChartKnown = false;
     let currentSessionId = null;
     let resultsChart = null;
 
+    // Which stored import is the active read-only source. null means the
+    // default application database, which preserves the original
+    // behaviour exactly. selectedImportMeta carries the display name so
+    // the UI can name the source without trusting the sandbox filename.
+    let selectedImportId = null;
+    let selectedImportMeta = null;
+    // The tables/columns of whatever schema is currently displayed, kept
+    // so Quick Query suggestions are derived from the active source
+    // rather than from the default database.
+    let activeSchemaTables = [];
     const MAX_SESSION_TURNS = 50;
     const MAX_PDF_ROWS = 2000;
 
@@ -1579,7 +1609,7 @@
                                 .map(column => `
                                     <div>
                                         <span class="column-key">${escapeHtml(column.name)}</span>
-                                        ${column.type ? `Â· ${escapeHtml(column.type)}` : ""}
+                                        ${column.type ? `· ${escapeHtml(column.type)}` : ""}
                                     </div>
                                 `)
                                 .join("")
@@ -1643,9 +1673,19 @@
                guarded /api/schema is unchanged and still used by
                scripts that hold the application access key. */
             const response =
-                await fetch("/api/public/schema");
+                await fetch(sourceSchemaUrl());
+            if (handleAuthFailure(response)) {
+                return;
+            }
 
             if (!response.ok) {
+                if (selectedImportId && response.status === 404) {
+                    /* The selected import is gone. Fall back to the
+                       default database rather than describing nothing. */
+                    setActiveSource("", null);
+                    resetResultsForSourceChange();
+                    return loadLiveSchema();
+                }
                 throw new Error(
                     `Schema request failed (${response.status})`
                 );
@@ -1659,8 +1699,10 @@
                     result.schema
                 );
 
+            activeSchemaTables = tables;
             renderSchemaTree(tables);
 
+            renderQuickQueries(tables);
         } catch (error) {
 
             if (container) {
@@ -1674,7 +1716,7 @@
                             class="history-use"
                             onclick="loadLiveSchema()"
                         >
-                            â†» RETRY
+                            ↻ RETRY
                         </button>
                     </div>
                 `;
@@ -1780,7 +1822,7 @@
                                 class="history-use"
                                 onclick="useHistoryQuery(${index})"
                             >
-                                â†» USE QUERY
+                                ↻ USE QUERY
                             </button>
 
                         </div>
@@ -2116,7 +2158,11 @@
                                 history:
                                     sessionHistory,
                                 session_id:
-                                    currentSessionId || null
+                                    currentSessionId || null,
+                                /* Omitted from the JSON when no import is
+                                   selected, so the default database path is
+                                   byte-for-byte the previous request. */
+                                import_id: selectedImportId || undefined
                             })
                     }
                 );
@@ -2174,6 +2220,11 @@
             lastTruncated = Boolean(result.truncated);
             lastProvenance = result.provenance || null;
             lastVerification = result.verification || null;
+            lastChart = result.chart || null;
+            lastChartKnown = Object.prototype.hasOwnProperty.call(
+                result,
+                "chart"
+            );
             lastQueryTime = new Date();
 
 
@@ -2236,7 +2287,9 @@
 
             renderChart(
                 lastSql,
-                lastResultData
+                lastResultData,
+                lastChart,
+                lastChartKnown
             );
 
 
@@ -2260,9 +2313,9 @@
             renderHistory();
 
 
+
+
             scrollToLatestHistory();
-
-
             requestAnimationFrame(() => {
 
                 document
@@ -2343,29 +2396,66 @@
        TABLE
     ===================================================== */
 
-    function formatCell(key, value) {
+    /* -----------------------------------------------------
+       NUMBER FORMATTING (shared by the table and the PDF)
+       ----------------------------------------------------- */
+    // A column is treated as money only when its name carries an
+    // explicit monetary word, or is one of the ambiguous aggregate
+    // names, and it is not a count/quantity/id/year. This keeps
+    // "total_quantity" and "order_count" as plain numbers.
+    function isMoneyKey(key) {
+        const name = String(key || "").toLowerCase();
 
         if (
-            value === null ||
-            value === undefined
+            /count|qty|quantity|number|_id$|^id$|year|age|percent|pct|rate|score|rank|rows?$/.test(name)
         ) {
+            return false;
+        }
+
+        return /price|amount|cost|revenue|salary|fee|balance|payment|income|expense|budget|spend|profit|wage|discount|tax|charge|credit|debit|refund|total|sum|net|gross/.test(name);
+
+    }
+
+    // The one numeric renderer for screen and PDF. It never changes
+    // the value, only its display: integers stay integers, real
+    // numbers keep two decimals, and a genuine money column is the
+    // only thing that gets a currency symbol.
+    function formatNumericValue(key, value) {
+        if (isMoneyKey(key)) {
+            return "$" + value.toFixed(2);
+        }
+        if (Number.isInteger(value)) {
+            return String(value);
+        }
+        return String(Math.round(value * 100) / 100);
+    }
+    // Chart data goes through the same "is this really a number"
+    // rule; anything unparseable becomes null so the plot skips it
+    // instead of drawing a broken point. A blank cell, a boolean and
+    // a non-finite value are all missing data, NOT zero: converting
+    // them to 0 would invent a value the query never returned.
+    function chartNumber(value) {
+        if (
+            value === null ||
+            value === undefined ||
+            typeof value === "boolean" ||
+            (typeof value === "string" && value.trim() === "")
+        ) {
+            return null;
+        }
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+    }
+    function formatCell(key, value) {
+        if (value === null || value === undefined) {
             return "";
         }
 
-
-        if (
-            /price|amount|total/i.test(key) &&
-            value !== "" &&
-            !Number.isNaN(
-                Number(value)
-            )
-        ) {
-
-            return "$" +
-                Number(value)
-                    .toFixed(2);
+        // Only a real JSON number is formatted. A numeric-looking
+        // string is a TEXT column and is shown exactly as stored.
+        if (typeof value === "number" && Number.isFinite(value)) {
+            return formatNumericValue(key, value);
         }
-
 
         return String(value);
     }
@@ -2395,6 +2485,7 @@
                 "items-center",
                 "justify-center"
             );
+            container.style.display = "flex";
 
 
             container.innerHTML = `
@@ -2486,6 +2577,7 @@
             "items-center",
             "justify-center"
         );
+        container.style.display = "block";
 
 
         container.innerHTML =
@@ -2499,12 +2591,20 @@
 
     function isNumeric(value) {
 
-        return (
-            value !== null &&
-            value !== "" &&
-            !Number.isNaN(
-                Number(value)
-            )
+        // A blank cell, a boolean or a non-finite value is missing
+        // data, not a number. Treating " " or true as 0 here is how a
+        // chart would report a value no row contained.
+        if (
+            value === null ||
+            value === undefined ||
+            typeof value === "boolean" ||
+            (typeof value === "string" && value.trim() === "")
+        ) {
+            return false;
+        }
+
+        return Number.isFinite(
+            Number(value)
         );
     }
 
@@ -2530,6 +2630,39 @@
 
             resultsChart = null;
         }
+
+
+        const kpi =
+            document.getElementById(
+                "chartKpi"
+            );
+
+        if (kpi) {
+            kpi.classList.add("hidden");
+            kpi.innerHTML = "";
+        }
+
+
+        const note =
+            document.getElementById(
+                "chartNote"
+            );
+
+        if (note) {
+            note.classList.add("hidden");
+            note.textContent = "";
+        }
+
+
+        const wrap =
+            document.getElementById(
+                "chartCanvasWrap"
+            );
+
+        if (wrap) {
+            wrap.classList.remove("hidden");
+        }
+
 
         updateExportStates();
     }
@@ -2604,9 +2737,451 @@
     }
 
 
-    function renderChart(sql, data) {
+    // Locale-aware number text for chart axes, tooltips and the KPI
+    // card. It only changes the display of a value the server already
+    // sent; it never rounds a value into a different one.
+    function chartTickText(value) {
+
+        const number = Number(value);
+
+        if (!Number.isFinite(number)) {
+            return String(value);
+        }
+
+        return number.toLocaleString(
+            undefined,
+            { maximumFractionDigits: 2 }
+        );
+    }
+
+
+    function chartValueText(column, value) {
+
+        if (value === null || value === undefined) {
+            return "No value";
+        }
+
+        const text = chartTickText(value);
+
+        return isMoneyKey(column) ? "$" + text : text;
+    }
+
+
+    // Renders a server-built chart plan. The plan names the chart type
+    // and carries only values the result rows actually contained; this
+    // function is presentation: titles, axis labels, legends, locale
+    // number formatting and readable tick labels.
+    function renderChartPlan(plan) {
+
+        const panel =
+            document.getElementById(
+                "chartPanel"
+            );
+
+        const title =
+            document.getElementById(
+                "chartTitle"
+            );
+
+        const note =
+            document.getElementById(
+                "chartNote"
+            );
+
+        const wrap =
+            document.getElementById(
+                "chartCanvasWrap"
+            );
+
+        const kpi =
+            document.getElementById(
+                "chartKpi"
+            );
+
+        panel.classList.remove("hidden");
+
+        if (title) {
+            title.textContent =
+                plan.title || "Automatic Visualization";
+        }
+
+        if (note && plan.note) {
+            note.textContent = plan.note;
+            note.classList.remove("hidden");
+        }
+
+        // Too many rows to chart readably. Nothing was sampled or
+        // dropped: the full table is on screen and the note says why
+        // there is no chart beside it.
+        if (plan.type === "table") {
+
+            wrap.classList.add("hidden");
+            kpi.classList.add("hidden");
+            kpi.innerHTML = "";
+
+            updateExportStates();
+
+            return;
+        }
+
+        if (plan.type === "kpi") {
+
+            const column =
+                plan.kpi && plan.kpi.column;
+
+            const value =
+                plan.kpi ? plan.kpi.value : null;
+
+            wrap.classList.add("hidden");
+
+            kpi.innerHTML = `
+                <div class="chart-kpi-value">${escapeHtml(
+                    chartValueText(column, value)
+                )}</div>
+                <div class="chart-kpi-label">${escapeHtml(
+                    (plan.kpi && plan.kpi.label) || column || ""
+                )}</div>
+            `;
+
+            kpi.classList.remove("hidden");
+
+            updateExportStates();
+
+            return;
+        }
+
+        const light =
+            document.body.classList.contains(
+                "light"
+            );
+
+        const textColor =
+            light ? "#5a5c61" : "#c9cbd0";
+
+        const tickColor =
+            light ? "#6e7075" : "#8a8c92";
+
+        const gridColor =
+            light
+                ? "rgba(15,23,42,.08)"
+                : "rgba(255,255,255,.07)";
+
+        const isCircular =
+            plan.type === "doughnut";
+
+        const labels =
+            plan.labels || [];
+
+        const datasets =
+            (plan.datasets || []).map(
+                (dataset, index) => ({
+
+                    label: dataset.label,
+
+                    data: dataset.data,
+
+                    backgroundColor:
+                        isCircular
+                            ? CHART_COLORS.slice(
+                                0,
+                                labels.length
+                            )
+                            : CHART_COLORS[
+                                index %
+                                CHART_COLORS.length
+                            ] + "cc",
+
+                    borderColor:
+                        isCircular
+                            ? "#0f1016"
+                            : CHART_COLORS[
+                                index %
+                                CHART_COLORS.length
+                            ],
+
+                    borderWidth: 1,
+
+                    borderRadius:
+                        isCircular ? 0 : 8,
+
+                    tension:
+                        plan.type === "line"
+                            ? 0.32
+                            : 0,
+
+                    fill: false,
+
+                    pointRadius:
+                        plan.type === "line"
+                            ? 3
+                            : 0
+
+                })
+            );
+
+        const showLegend =
+            isCircular ||
+            datasets.length > 1;
+
+        resultsChart =
+            new Chart(
+                document.getElementById(
+                    "resultsChart"
+                ),
+                {
+                    type: plan.type,
+
+                    data: {
+                        labels,
+                        datasets
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        maintainAspectRatio:
+                            false,
+
+                        plugins: {
+
+                            legend: {
+
+                                display:
+                                    showLegend,
+
+                                labels: {
+
+                                    color:
+                                        textColor,
+
+                                    font: {
+                                        size: 10
+                                    }
+
+                                }
+
+                            },
+
+                            tooltip: {
+
+                                callbacks: {
+
+                                    label: context => {
+
+                                        const column =
+                                            context.dataset.label;
+
+                                        if (
+                                            isCircular
+                                        ) {
+
+                                            const total =
+                                                (
+                                                    context.dataset.data ||
+                                                    []
+                                                ).reduce(
+                                                    (sum, value) =>
+                                                        sum +
+                                                        (
+                                                            Number.isFinite(
+                                                                Number(value)
+                                                            )
+                                                                ? Number(value)
+                                                                : 0
+                                                        ),
+                                                    0
+                                                );
+
+                                            const value =
+                                                Number(
+                                                    context.parsed
+                                                );
+
+                                            const percent =
+                                                total > 0
+                                                    ? " (" +
+                                                      (
+                                                          (value / total) *
+                                                          100
+                                                      ).toFixed(1) +
+                                                      "%)"
+                                                    : "";
+
+                                            return (
+                                                context.label +
+                                                ": " +
+                                                chartValueText(
+                                                    column,
+                                                    value
+                                                ) +
+                                                percent
+                                            );
+                                        }
+
+                                        return (
+                                            column +
+                                            ": " +
+                                            chartValueText(
+                                                column,
+                                                context.parsed.y
+                                            )
+                                        );
+
+                                    }
+
+                                }
+
+                            }
+
+                        },
+
+                        scales:
+                            isCircular
+                                ? {}
+                                : {
+
+                                    x: {
+
+                                        title: {
+
+                                            display:
+                                                Boolean(
+                                                    plan.x_label
+                                                ),
+
+                                            text:
+                                                plan.x_label || "",
+
+                                            color:
+                                                tickColor,
+
+                                            font: {
+                                                size: 10
+                                            }
+
+                                        },
+
+                                        ticks: {
+
+                                            color:
+                                                tickColor,
+
+                                            autoSkip: true,
+
+                                            maxRotation: 45,
+
+                                            callback:
+                                                function (
+                                                    value
+                                                ) {
+
+                                                    const label =
+                                                        this.getLabelForValue(
+                                                            value
+                                                        );
+
+                                                    const text =
+                                                        label === null ||
+                                                        label ===
+                                                            undefined
+                                                            ? ""
+                                                            : String(
+                                                                  label
+                                                              );
+
+                                                    return text.length >
+                                                        18
+                                                        ? text.slice(
+                                                              0,
+                                                              17
+                                                          ) + "…"
+                                                        : text;
+
+                                                }
+
+                                        },
+
+                                        grid: {
+                                            color:
+                                                gridColor
+                                        }
+
+                                    },
+
+                                    y: {
+
+                                        beginAtZero:
+                                            true,
+
+                                        title: {
+
+                                            display:
+                                                Boolean(
+                                                    plan.y_label
+                                                ),
+
+                                            text:
+                                                plan.y_label || "",
+
+                                            color:
+                                                tickColor,
+
+                                            font: {
+                                                size: 10
+                                            }
+
+                                        },
+
+                                        ticks: {
+
+                                            color:
+                                                tickColor,
+
+                                            callback:
+                                                value =>
+                                                    chartTickText(
+                                                        value
+                                                    )
+
+                                        },
+
+                                        grid: {
+                                            color:
+                                                gridColor
+                                        }
+
+                                    }
+
+                                }
+
+                    }
+
+                }
+            );
+
+        updateExportStates();
+    }
+
+
+    function renderChart(sql, data, plan, planKnown) {
 
         hideChart();
+
+
+        // A server plan is authoritative: it was built from the rows
+        // that were actually returned. When the backend sent the field
+        // at all (even as null) its decision stands; the local
+        // heuristic below only runs for an older backend that sends no
+        // chart field, preserving the exact previous behaviour.
+        if (planKnown) {
+
+            if (plan && plan.type) {
+                renderChartPlan(plan);
+            }
+
+            return;
+        }
 
 
         if (
@@ -2679,9 +3254,7 @@
                     data:
                         data.map(
                             row =>
-                                Number(
-                                    row[key]
-                                )
+                                chartNumber(row[key])
                         ),
 
                     backgroundColor:
@@ -2826,7 +3399,7 @@
 
 
 /* =====================================================
-       PROVENANCE â€” WHERE THE ROWS CAME FROM
+       PROVENANCE — WHERE THE ROWS CAME FROM
        ===================================================== */
 
     // Shown instead of a value the server could not establish. A
@@ -3036,6 +3609,12 @@
 
         if (badge) {
             badge.textContent = VERIFICATION_BADGE;
+            badge.title =
+                (verification &&
+                    typeof verification.note === "string" &&
+                    verification.note.trim()) ||
+                FALLBACK_NOTE;
+            badge.setAttribute("aria-label", badge.title);
         }
 
         const note =
@@ -3261,18 +3840,16 @@
        PDF REPORT
     ===================================================== */
 
-    function pdfCellText(value) {
+    function pdfCellText(key, value) {
 
         if (value === null || value === undefined) {
             return "NULL";
+
         }
 
-        if (typeof value === "number") {
-            return Number.isInteger(value)
-                ? String(value)
-                : String(Math.round(value * 100) / 100);
+        if (typeof value === "number" && Number.isFinite(value)) {
+            return formatNumericValue(key, value);
         }
-
         return String(value);
     }
 
@@ -3327,7 +3904,7 @@
         if (!window.jspdf) {
 
             showToast(
-                "PDF library not loaded â€” check connection and retry"
+                "PDF library not loaded — check connection and retry"
             );
 
             return;
@@ -3399,7 +3976,7 @@
                     doc.setTextColor(148, 163, 184);
 
                     doc.text(
-                        `TIIX SQL Studio Â· ${sourceName} Â· not verified`,
+                        `TIIX SQL Studio · ${sourceName} · not verified`,
                         margin,
                         pageHeight - 22
                     );
@@ -3421,7 +3998,7 @@
             doc.setFont("helvetica", "bold");
             doc.setFontSize(16);
             doc.text(
-                "TIIX SQL Studio â€” Query Execution Report",
+                "TIIX SQL Studio — Query Execution Report",
                 margin,
                 36
             );
@@ -3430,12 +4007,12 @@
             doc.setFontSize(9);
             doc.setTextColor(224, 231, 255);
             doc.text(
-                `Generated ${generatedAt.toLocaleString()} Â· ${lastCount} row${lastCount === 1 ? "" : "s"}${lastTruncated ? " (truncated)" : ""}`,
+                `Generated ${generatedAt.toLocaleString()} · ${lastCount} row${lastCount === 1 ? "" : "s"}${lastTruncated ? " (truncated)" : ""}`,
                 margin,
                 56
             );
             doc.text(
-                `Database: ${sourceName} Â· Execution: ` +
+                `Database: ${sourceName} · Execution: ` +
                 (lastCount > 0 ? "returned rows" : "completed, no rows"),
                 margin,
                 70
@@ -3669,7 +4246,7 @@
                     pdfRows.map(row =>
                         keys.map(
                             key =>
-                                pdfCellText(row[key])
+                                pdfCellText(key, row[key])
                         )
                     );
 
@@ -3795,7 +4372,7 @@
         } catch (error) {
 
             showToast(
-                "PDF export failed â€” " +
+                "PDF export failed — " +
                 (error && error.message
                     ? error.message
                     : "unexpected error")
@@ -4044,90 +4621,390 @@
         "keydown",
         event => {
 
-            /* Ctrl + Shift + L */
 
+
+            /* Ctrl + Shift + L */
             if (
                 event.ctrlKey &&
                 event.shiftKey &&
                 event.key.toLowerCase() === "l"
             ) {
-
                 event.preventDefault();
-
                 toggleTheme();
-
                 return;
             }
-
-
             /* Ctrl + K */
-
             if (
                 event.ctrlKey &&
                 event.key.toLowerCase() === "k"
             ) {
-
                 event.preventDefault();
-
                 openCommandPalette();
-
                 return;
             }
-
-
             /* Escape */
-
             if (
                 event.key === "Escape"
             ) {
-
                 closeCommandPalette();
-
             }
-
         }
     );
-
-
     /* =====================================================
        INITIAL STATE
     ===================================================== */
-
     renderHistory();
-
     updateLineNumbers();
-
     loadLiveSchema();
-
+    updateSourceIndicators();
     /* =====================================================
-       WORKSPACE â€” SESSIONS / UPLOAD / APPROVALS / SERVER PDF
+       WORKSPACE — SESSIONS / UPLOAD / APPROVALS / SERVER PDF
     ===================================================== */
-
     function openWorkspace(which) {
-
         const backdrop = document.getElementById(
             which + "Backdrop"
         );
-
         backdrop.classList.add("open");
-
         if (which === "sessions") {
             loadSessions();
+        } else if (which === "upload") {
+            loadImports();
         } else if (which === "approvals") {
             loadApprovals();
         }
     }
-
-
     function closeWorkspace(event, which) {
-
         event.stopPropagation();
-
         document.getElementById(
             which + "Backdrop"
         ).classList.remove("open");
     }
+    /* =====================================================
+       DATA SOURCE SELECTION
+       ===================================================== */
+    function sourceSchemaUrl() {
+        return selectedImportId
+            ? "/api/schema?import_id=" + encodeURIComponent(selectedImportId)
+            : "/api/public/schema";
+    }
+    function currentSourceLabel() {
+        return selectedImportMeta && selectedImportMeta.filename
+            ? selectedImportMeta.filename
+            : "store.db";
+    }
+    function setActiveSource(id, meta) {
+        selectedImportId = id || null;
+        selectedImportMeta = meta || null;
+        updateSourceIndicators();
+    }
+    function updateSourceIndicators() {
+        const select = document.getElementById("sourceSelect");
+        if (select) {
+            select.value = selectedImportId || "";
+        }
+        const meta = document.getElementById("dbMeta");
+        if (meta) {
+            meta.innerHTML =
+                escapeHtml(currentSourceLabel()) +
+                "<br>live schema via " +
+                (selectedImportId ? "guarded /api/schema" : "/api/public/schema");
+        }
+        const tag = document.getElementById("sourceTag");
+        if (tag) {
+            const isImport = !!selectedImportId;
+            tag.textContent = isImport ? "Import" : "Default DB";
+            tag.title = isImport
+                ? "Querying the imported source: " + currentSourceLabel()
+                : "Querying the default database (store.db)";
+            tag.classList.toggle("is-import", isImport);
+        }
+    }
+    function resetResultsForSourceChange() {
+        lastResultData = [];
+        lastSql = "";
+        lastPrompt = "";
+        lastExplanation = "";
+        lastCount = 0;
+        lastTruncated = false;
+        lastQueryTime = null;
+        lastChart = null;
+        lastChartKnown = false;
+        clearProvenance();
+        const output = document.getElementById("sqlOutput");
+        if (output) {
+            output.textContent = "-- SQL query will appear here...";
+        }
+        updateLineNumbers();
+        const status = document.getElementById("sqlStatus");
+        if (status) {
+            status.textContent = "Ready";
+        }
+        const data = document.getElementById("dataOutput");
+        if (data) {
+            data.innerHTML = 'Click "Generate SQL & Run" to execute a query.';
+            data.classList.add("items-center", "justify-center");
+        }
+        const metric = document.getElementById("resultMetric");
+        if (metric) {
+            metric.textContent = "0 rows";
+        }
+        const explanation = document.getElementById("explanationBox");
+        if (explanation) {
+            explanation.classList.add("hidden");
+            explanation.textContent = "";
+        }
+        hideChart();
+        updateExportStates();
+    }
+    async function onSourceChange() {
+        const select = document.getElementById("sourceSelect");
+        if (!select) {
+            return;
+        }
+        const id = select.value || "";
+        if (id === (selectedImportId || "")) {
+            return;
+        }
+        if (id) {
+            const option = select.options[select.selectedIndex];
+            setActiveSource(id, {
+                id: id,
+                filename: option ? option.dataset.filename : id,
+                kind: option ? option.dataset.kind : ""
+            });
+        } else {
+            setActiveSource("", null);
+        }
+        resetResultsForSourceChange();
+        // Isolate: clear conversation history when source changes
+        sessionHistory = [];
+        await loadLiveSchema();
+        showToast("Source: " + currentSourceLabel());
+    }
+    /* =====================================================
+       STORED IMPORTS
+       ===================================================== */
+    async function loadImports() {
+        const container = document.getElementById("importsList");
+        if (container) {
+            container.innerHTML =
+                '<div class="history-empty thinking">Loading imports...</div>';
+        }
+        try {
+            const response = await fetch("/api/imports");
+            if (handleAuthFailure(response)) {
+                return;
+            }
+            if (!response.ok) {
+                throw new Error("Could not load imports.");
+            }
+            const body = await response.json();
+            const imports = (body && body.imports) || [];
+            renderImports(imports);
+            syncSourceOptions(imports);
+        } catch (error) {
+            if (container) {
+                container.innerHTML =
+                    '<div class="history-empty">' +
+                    escapeHtml(error.message || "Could not load imports.") +
+                    "</div>";
+            }
+        }
+    }
+    function renderImports(imports) {
+        const container = document.getElementById("importsList");
+        if (!container) {
+            return;
+        }
+        if (!imports.length) {
+            container.innerHTML =
+                '<div class="history-empty">None yet.</div>';
+            return;
+        }
+        container.innerHTML = imports.map(item => {
+            const id = escapeHtml(item.id);
+            const active = item.id === selectedImportId;
+            const name = escapeHtml(item.filename || item.id);
+            const kind = escapeHtml(
+                String(item.kind || "import").toUpperCase()
+            );
+            return (
+                '<div class="ws-row' + (active ? " active" : "") + '">' +
+                    '<div class="ws-row-main">' +
+                        '<div class="ws-row-title">' + name + "</div>" +
+                        '<div class="ws-row-sub">' + kind +
+                        " &middot; " + id + "</div>" +
+                    "</div>" +
+                    '<div class="ws-row-actions">' +
+                        '<button type="button" class="history-use" ' +
+                        "onclick=\"useImport('" + id + "')\">" +
+                        (active ? "Active" : "Use") +
+                        "</button>" +
+                        '<button type="button" class="history-use" ' +
+                        "onclick=\"deleteImport('" + id + "')\">Delete</button>" +
+                    "</div>" +
+                "</div>"
+            );
+        }).join("");
+    }
+    function syncSourceOptions(imports) {
+        const select = document.getElementById("sourceSelect");
+        if (!select) {
+            return;
+        }
+        const current = selectedImportId || "";
+        select.innerHTML =
+            '<option value="">Default database (store.db)</option>';
+        imports.forEach(item => {
+            const option = document.createElement("option");
+            option.value = item.id;
+            option.textContent = item.filename || item.id;
+            option.dataset.kind = item.kind || "";
+            option.dataset.filename = item.filename || item.id;
+            select.appendChild(option);
+        });
+        const stillThere = imports.some(item => item.id === current);
+        if (current && !stillThere) {
+            /* The active import was removed elsewhere. */
+            setActiveSource("", null);
+            resetResultsForSourceChange();
+        } else {
+            select.value = current;
+            if (current) {
+                const item = imports.find(entry => entry.id === current);
+                selectedImportMeta = {
+                    id: item.id,
+                    filename: item.filename,
+                    kind: item.kind
+                };
+            }
+        }
+        updateSourceIndicators();
+    }
+    async function useImport(id) {
+        const select = document.getElementById("sourceSelect");
+        if (!select) {
+            return;
+        }
+        select.value = id;
+        await onSourceChange();
+        await loadImports();
+    }
+    async function deleteImport(id) {
+        if (!window.confirm("Delete this stored import?")) {
+            return;
+        }
+        try {
+            const response = await fetch(
+                "/api/imports/" + encodeURIComponent(id),
+                { method: "DELETE" }
+            );
+            if (handleAuthFailure(response)) {
+                return;
+            }
+            if (!response.ok) {
+                throw new Error("Could not delete import.");
+            }
+        if (id === selectedImportId) {
+            setActiveSource("", null);
+            resetResultsForSourceChange();
+            sessionHistory = [];
+            await loadLiveSchema();
+        }
+            await loadImports();
+            showToast("Import deleted");
+        } catch (error) {
+            showToast(error.message);
+        }
+    }
+    /* =====================================================
+       QUICK QUERIES (SCHEMA AWARE)
+       ===================================================== */
 
+    function quickQueryIsNumericType(type) {
+
+        return /INT|REAL|FLOA|DOUB|NUM|DEC/i.test(type || "");
+
+    }
+
+    function quickQueryIsTextType(type) {
+
+        return /CHAR|CLOB|TEXT/i.test(type || "") || !type;
+
+    }
+
+    function renderQuickQueries(tables) {
+
+        const container = document.getElementById("quickQueries");
+
+        if (!container) {
+            return;
+        }
+
+        const suggestions = [];
+
+        const add = text => {
+            if (
+                text &&
+                suggestions.indexOf(text) === -1 &&
+                suggestions.length < 6
+            ) {
+                suggestions.push(text);
+            }
+        };
+
+        tables.slice(0, 4).forEach(table => {
+
+            const name = table.name;
+
+            add("Show the first 20 rows from " + name);
+
+            add("How many rows are in " + name + "?");
+
+            const numeric = table.columns.find(column =>
+                quickQueryIsNumericType(column.type)
+            );
+
+            const text = table.columns.find(column =>
+                quickQueryIsTextType(column.type)
+            );
+
+            if (numeric) {
+                add("Total " + numeric.name + " from " + name);
+                add("Top 10 " + name + " by " + numeric.name);
+            }
+
+            if (numeric && text) {
+                add("Average " + numeric.name + " by " + text.name);
+            }
+
+            if (text) {
+                add("List distinct " + text.name + " from " + name);
+            }
+
+        });
+
+        if (!suggestions.length) {
+
+            /* No usable schema: leave the safe fallback chips in place. */
+            return;
+
+        }
+
+        container.innerHTML = "";
+
+        suggestions.forEach(text => {
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "suggestion";
+            button.textContent = text;
+            button.addEventListener("click", () => setQuery(text));
+            container.appendChild(button);
+
+        });
+
+    }
 
     function setSessionBadge(label) {
 
@@ -4181,7 +5058,7 @@
                 sub.className = "ws-row-sub";
                 sub.textContent =
                     (session.summary
-                        ? session.summary.replace("Recent questions:\n", "") + " â€” "
+                        ? session.summary.replace("Recent questions:\n", "") + " — "
                         : "") +
                     session.updated_at;
 
@@ -4347,9 +5224,9 @@
                 "</div>" +
                 '<div class="ws-mono" style="margin-top:6px">' +
                 result.kind.toUpperCase() +
-                " Â· " +
+                " · " +
                 result.table_count +
-                " tables Â· " +
+                " tables · " +
                 result.column_count +
                 " columns</div>" +
                 '<div class="ws-tags">' +
@@ -4361,6 +5238,20 @@
 
             showToast("Imported into sandbox");
 
+            /* Make the freshly imported file the active source, then
+               rebuild the stored-import list and the schema from it. */
+            if (result.id) {
+                setActiveSource(result.id, {
+                    id: result.id,
+                    filename: result.filename,
+                    kind: result.kind
+                });
+                await loadImports();
+                resetResultsForSourceChange();
+                await loadLiveSchema();
+            } else {
+                await loadImports();
+            }
         } catch (error) {
 
             resultBox.innerHTML = "";
@@ -4416,7 +5307,7 @@
                 head.className = "ws-mono";
                 head.textContent =
                     approval.kind.toUpperCase() +
-                    " â€” " +
+                    " — " +
                     approval.created_at;
 
                 const sql = document.createElement("div");
@@ -4516,7 +5407,10 @@
                     truncated: lastTruncated,
                     source_database: sourceLabel(),
                     source_sha256: digestLabel(),
-                    model: modelLabel()
+                    model: modelLabel(),
+                    /* Omitted when no import is selected, so the default
+                       database report is unchanged. */
+                    import_id: selectedImportId || undefined
                 })
             });
 

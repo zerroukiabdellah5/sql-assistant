@@ -261,7 +261,7 @@ def test_500_response_carries_the_request_id(
 ):
     """An unhandled exception becomes a 500 that still carries the id."""
 
-    def explode():
+    def explode(*a, **k):
         raise sqlite3.OperationalError(
             f"unable to open database file {PATH_MARKER}"
         )
@@ -356,7 +356,7 @@ def test_state_request_id_is_set_before_the_handler_runs(
     """The id exists from the first line of the lifecycle, so even a
     handler that crashes can report it."""
 
-    def explode():
+    def explode(*a, **k):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(main, "get_schema", explode)
@@ -565,7 +565,7 @@ def test_unexpected_exception_is_logged_with_its_traceback_and_id(
         logging.INFO, logger=observability._ERROR_LOGGER_NAME
     )
 
-    def explode():
+    def explode(*a, **k):
         raise RuntimeError(
             f"provider failed using {SECRET_MARKER} at {PATH_MARKER}"
         )
@@ -637,7 +637,7 @@ def test_error_records_go_to_a_stream_capable_of_platform_collection(
     assert isinstance(handler, logging.Handler)
     assert handler.formatter is not None
 
-    def explode():
+    def explode(*a, **k):
         raise RuntimeError("boom")
 
     with pytest.MonkeyPatch.context() as patch:
@@ -657,7 +657,7 @@ def test_error_records_go_to_a_stream_capable_of_platform_collection(
 # ============================================================
 
 def test_schema_failure_is_generic(authed_client, monkeypatch):
-    def explode():
+    def explode(*a, **k):
         raise sqlite3.OperationalError(
             f"unable to open database file {PATH_MARKER}"
         )
@@ -867,7 +867,7 @@ def test_upload_keeps_the_hand_written_file_type_rule_visible(
 
     assert response.status_code == 400
     assert response.json()["detail"] == (
-        "Unsupported file type. Use .db/.sqlite/.sqlite3, .sql, or .xlsx."
+        "Unsupported file type. Use .db/.sqlite/.sqlite3, .sql, .xlsx, or .csv."
     )
 
 

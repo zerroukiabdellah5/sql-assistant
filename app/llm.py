@@ -490,6 +490,7 @@ class LLMProvider:
         history,
         request_id=None,
         generation=None,
+        database_path=None,
     ):
         """Return (sql, explanation).
 
@@ -502,6 +503,10 @@ class LLMProvider:
         provider records its own name and model in it after a
         successful parse, so a caller can report the provider that
         really answered instead of guessing from configuration.
+
+        database_path is the optional SQLite file the schema is read
+        from. When omitted (None) the default application database is
+        inspected, which is exactly the previous behaviour.
         """
 
         raise NotImplementedError
@@ -540,6 +545,7 @@ class GeminiProvider(LLMProvider):
         history,
         request_id=None,
         generation=None,
+        database_path=None,
     ):
 
         # Outermost statement on purpose: the permit is taken before
@@ -551,7 +557,7 @@ class GeminiProvider(LLMProvider):
 
             started_at = time.perf_counter()
 
-            schema = inspect_database()
+            schema = inspect_database(database_path)
             system_instruction = build_system_instruction(
                 schema
             )
@@ -728,6 +734,7 @@ class NVIDIAProvider(LLMProvider):
         history,
         request_id=None,
         generation=None,
+        database_path=None,
     ):
 
         # See GeminiProvider.generate: one permit per request, taken
@@ -737,7 +744,7 @@ class NVIDIAProvider(LLMProvider):
 
             started_at = time.perf_counter()
 
-            schema = inspect_database()
+            schema = inspect_database(database_path)
             system_instruction = build_system_instruction(
                 schema
             )
@@ -878,6 +885,7 @@ def ask_active(
     history,
     request_id=None,
     generation=None,
+    database_path=None,
 ):
     """Generate with the configured provider.
 
@@ -887,6 +895,10 @@ def ask_active(
 
     generation is an optional GenerationRef filled in with the provider
     and model that answered. The return value is unchanged.
+
+    database_path is the optional SQLite file whose schema drives the
+    prompt. Omitted (None) means the default application database, so
+    every existing caller keeps its exact behaviour.
     """
 
     return get_provider().generate(
@@ -894,6 +906,7 @@ def ask_active(
         history,
         request_id=request_id,
         generation=generation,
+        database_path=database_path,
     )
 
 
@@ -902,10 +915,12 @@ def ask_gemini(
     history,
     request_id=None,
     generation=None,
+    database_path=None,
 ):
     return GeminiProvider().generate(
         user_prompt,
         history,
         request_id=request_id,
         generation=generation,
+        database_path=database_path,
     )

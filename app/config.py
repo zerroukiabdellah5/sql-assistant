@@ -281,6 +281,7 @@ MAX_SQL_SCRIPT_STATEMENTS = 100
 ALLOWED_DATABASE_EXTENSIONS = (".db", ".sqlite", ".sqlite3")
 ALLOWED_SQL_EXTENSIONS = (".sql",)
 ALLOWED_EXCEL_EXTENSIONS = (".xlsx",)
+ALLOWED_CSV_EXTENSIONS = (".csv",)
 
 # ------------------------------------------------------------
 # LLM

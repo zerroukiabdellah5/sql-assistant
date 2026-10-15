@@ -7,6 +7,7 @@
 # a brand-new throwaway database.
 # ============================================================
 
+import csv
 import io
 import os
 import re
@@ -21,8 +22,26 @@ from app.schema import (
 )
 from app.validate import ValidationError
 
+
+class ImportNotFound(ValidationError):
+    """A supplied import_id is well formed but matches no stored import.
+
+    Subclasses ValidationError because it is still a deliberate,
+    user-facing message. Call sites that want a 404 rather than a 400
+    can catch this type specifically; everything that only knows about
+    ValidationError keeps working unchanged.
+    """
+
+
 _TABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _SAFE_ID_RE = re.compile(r"[^A-Za-z0-9_.-]")
+
+# A stored import id is uuid4().hex[:12]: lowercase hex. The pattern is
+# deliberately narrow so a value that could ever be a path fragment
+# (a slash, a dot, a backslash, a drive colon) is rejected before any
+# filesystem call is made.
+_IMPORT_ID_RE = re.compile(r"^[A-Za-z0-9]{1,64}$")
+
 _STATEMENT_START_RE = re.compile(
     r"^(CREATE\s+(TABLE|UNIQUE\s+INDEX|INDEX|VIEW)|INSERT\s+INTO)\b",
     re.IGNORECASE,
@@ -301,6 +320,7 @@ def import_excel(filename, content):
 
         sheet_count = 0
         row_count = 0
+        truncated = False
 
         for index, sheet in enumerate(workbook.worksheets, start=1):
 
@@ -332,6 +352,10 @@ def import_excel(filename, content):
             for values in rows:
 
                 if len(data_rows) >= config.MAX_IMPORT_ROWS:
+                    # The cap is reached and there is at least one more
+                    # row to read, so data is being dropped. Recorded
+                    # rather than left silent.
+                    truncated = True
                     break
 
                 data_rows.append(
@@ -404,6 +428,210 @@ def import_excel(filename, content):
         "path": os.path.relpath(target, _upload_root()),
         "sheet_count": sheet_count,
         "row_count": row_count,
+        "truncated": truncated,
+        **inspected,
+    }
+
+
+# ============================================================
+# CSV FILES
+# ============================================================
+# A CSV is decoded, sniffed for a delimiter, and materialised as one
+# sandbox SQLite table. The result reuses the same column-name
+# sanitising and type inference as the Excel path, so the two import
+# kinds produce the same shape of database and the same schema text.
+
+# Only a plainly numeric token is coerced. A leading zero (an id or a
+# phone number) and an underscore-separated token are left as text, so
+# formatting is never silently changed by the import.
+_CSV_INT_RE = re.compile(r"^-?(0|[1-9][0-9]*)$")
+_CSV_FLOAT_RE = re.compile(r"^-?(0|[1-9][0-9]*)\.[0-9]+$")
+
+# Enough of the file for csv.Sniffer to detect a delimiter without
+# reading the whole upload twice.
+_CSV_SAMPLE_CHARS = 4096
+
+
+def _decode_text(content):
+    """Decode an uploaded text file, preferring UTF-8.
+
+    utf-8-sig strips a BOM when Excel wrote one. cp1252 and latin-1 are
+    tried so a Windows-exported file is still readable; latin-1 cannot
+    fail, so a final fallback is not reachable.
+    """
+
+    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            return content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    return content.decode("utf-8", errors="replace")
+
+
+def _read_csv_rows(text):
+    """Parse CSV text into a list of non-empty rows."""
+
+    try:
+        dialect = csv.Sniffer().sniff(
+            text[:_CSV_SAMPLE_CHARS],
+            delimiters=",;\t|",
+        )
+    except csv.Error:
+        dialect = csv.excel
+
+    reader = csv.reader(io.StringIO(text), dialect)
+
+    return [row for row in reader if row]
+
+
+def _clean_headers(raw_header):
+    """Sanitise and uniquify a CSV header row.
+
+    Each name is trimmed, whitespace collapsed to underscores, forced
+    through the shared identifier rule, and made unique against the
+    names already used in this table.
+    """
+
+    header = []
+    seen = set()
+
+    for index, raw in enumerate(raw_header, start=1):
+
+        name = _unique_header(
+            index,
+            re.sub(r"\s+", "_", str(raw or "")).strip("_"),
+        )
+
+        base = name
+        suffix = 2
+
+        while name in seen:
+            name = f"{base}_{suffix}"
+            suffix += 1
+
+        seen.add(name)
+        header.append(name)
+
+    return header
+
+
+def _coerce_csv_value(value):
+
+    if value is None:
+        return None
+
+    text = str(value).strip()
+
+    if text == "":
+        return None
+
+    if _CSV_INT_RE.match(text):
+        return int(text)
+
+    if _CSV_FLOAT_RE.match(text):
+        return float(text)
+
+    return text
+
+
+def import_csv(filename, content):
+    """Convert an uploaded .csv into a sandbox SQLite database."""
+
+    _ensure_upload_size(content)
+
+    rows = _read_csv_rows(_decode_text(content))
+
+    if not rows:
+        raise ValidationError("The CSV file is empty.")
+
+    header = _clean_headers(rows[0])
+
+    if not header:
+        raise ValidationError("The CSV file has no columns.")
+
+    data_rows = rows[1:]
+
+    if not data_rows:
+        raise ValidationError("The CSV file has no data rows.")
+
+    truncated = len(data_rows) > config.MAX_IMPORT_ROWS
+
+    if truncated:
+        data_rows = data_rows[:config.MAX_IMPORT_ROWS]
+
+    normalized = []
+
+    for values in data_rows:
+
+        # A short row is padded and a long row is trimmed to the
+        # header width, so an inconsistent file still loads and no
+        # column silently shifts into another.
+        row = [
+            _coerce_csv_value(value)
+            for value in values[:len(header)]
+        ]
+        row += [None] * (len(header) - len(row))
+        normalized.append(row)
+
+    columns = [
+        f"{name} "
+        f"{_infer_column_type([row[index] for row in normalized])}"
+        for index, name in enumerate(header)
+    ]
+
+    table_name = _sanitize_table_name(
+        os.path.splitext(os.path.basename(filename))[0],
+        1,
+    )
+
+    file_id = _new_id()
+    target = os.path.join(
+        _subdir("sandboxes"),
+        f"{file_id}_csv.db",
+    )
+
+    connection = sqlite3.connect(target)
+
+    try:
+
+        connection.execute(
+            f"CREATE TABLE {table_name} ({', '.join(columns)})"
+        )
+
+        placeholders = ", ".join(["?"] * len(header))
+
+        connection.executemany(
+            f"INSERT INTO {table_name} "
+            f"({', '.join(header)}) VALUES ({placeholders})",
+            [tuple(row) for row in normalized],
+        )
+
+        connection.commit()
+
+    except Exception:
+
+        connection.rollback()
+        connection.close()
+
+        if os.path.exists(target):
+            os.remove(target)
+
+        raise
+
+    else:
+
+        connection.close()
+
+    inspected = inspect_upload(target)
+
+    return {
+        "id": file_id,
+        "kind": "csv",
+        "filename": filename,
+        "path": os.path.relpath(target, _upload_root()),
+        "row_count": len(normalized),
+        "truncated": truncated,
         **inspected,
     }
 
@@ -426,13 +654,78 @@ def import_file(filename, content):
     if extension in config.ALLOWED_EXCEL_EXTENSIONS:
         return import_excel(filename, content)
 
+    if extension in config.ALLOWED_CSV_EXTENSIONS:
+        return import_csv(filename, content)
+
     raise ValidationError(
-        "Unsupported file type. Use .db/.sqlite/.sqlite3, .sql, or .xlsx."
+        "Unsupported file type. "
+        "Use .db/.sqlite/.sqlite3, .sql, .xlsx, or .csv."
     )
+
+
+def resolve_import_path(import_id):
+    """Absolute path of a stored import, confined to the upload root.
+
+    Raises ValidationError for a malformed id or any resolved path that
+    would escape UPLOAD_DIR, and ImportNotFound when a well-formed id
+    matches nothing. It never falls back to the caller's default: an
+    explicit import_id either resolves to a stored file or fails.
+
+    The id is only ever used as a filename prefix under the two known
+    sandbox subdirectories, and the resolved path is checked against
+    the real upload root, so a value containing a separator or a parent
+    reference cannot reach outside it.
+    """
+
+    if not import_id or not _IMPORT_ID_RE.match(import_id):
+        raise ValidationError("Invalid import id.")
+
+    root = os.path.realpath(_upload_root())
+    prefix = import_id + "_"
+
+    for sub in ["databases", "sandboxes"]:
+
+        directory = os.path.join(root, sub)
+
+        if not os.path.isdir(directory):
+            continue
+
+        for filename in os.listdir(directory):
+
+            if not filename.startswith(prefix):
+                continue
+
+            candidate = os.path.realpath(
+                os.path.join(directory, filename)
+            )
+
+            # Belt and braces: os.listdir cannot return a name with a
+            # separator, but the confinement check is what actually
+            # guarantees the returned path stays under the upload root
+            # even if a stored filename held one.
+            try:
+                inside = (
+                    os.path.commonpath([candidate, root]) == root
+                )
+            except ValueError:
+                inside = False
+
+            if not inside:
+                raise ValidationError("Invalid import path.")
+
+            if os.path.isfile(candidate):
+                return candidate
+
+    raise ImportNotFound("Import not found.")
 
 
 def delete_import(import_id):
     """Remove an imported file from any sandbox subdirectory."""
+
+    if not import_id or not _IMPORT_ID_RE.match(import_id):
+        return False
+
+    prefix = import_id + "_"
 
     for sub in ["databases", "sandboxes"]:
 
@@ -443,7 +736,7 @@ def delete_import(import_id):
 
         for filename in os.listdir(directory):
 
-            if filename.startswith(import_id):
+            if filename.startswith(prefix):
 
                 os.remove(os.path.join(directory, filename))
                 return True
@@ -454,6 +747,11 @@ def delete_import(import_id):
 def get_import(import_id):
     """Look up an import by id, inspecting it on demand."""
 
+    if not import_id or not _IMPORT_ID_RE.match(import_id):
+        return None
+
+    prefix = import_id + "_"
+
     for sub in ["databases", "sandboxes"]:
 
         directory = os.path.join(_upload_root(), sub)
@@ -463,14 +761,15 @@ def get_import(import_id):
 
         for filename in os.listdir(directory):
 
-            if filename.startswith(import_id):
+            if filename == prefix.rstrip("_"):  # unlikely
+                pass
 
+            if filename.startswith(prefix):
                 path = os.path.join(directory, filename)
-                kind = "database" if sub == "databases" else "sql_script"
 
                 return {
                     "id": import_id,
-                    "kind": kind,
+                    "kind": _kind_for(sub, filename),
                     "filename": filename,
                     "path": os.path.relpath(path, _upload_root()),
                     **inspect_upload(path),
@@ -479,15 +778,32 @@ def get_import(import_id):
     return None
 
 
+def _kind_for(sub, filename):
+    """Best-effort import kind from the sandbox a file lives in.
+
+    Databases keep their own name. A sandbox file is named after the
+    importer that produced it, so the suffix distinguishes a SQL
+    script from a converted Excel or CSV workbook without opening it.
+    """
+
+    if sub == "databases":
+        return "database"
+
+    if filename.endswith("_excel.db"):
+        return "excel"
+
+    if filename.endswith("_csv.db"):
+        return "csv"
+
+    return "sql_script"
+
+
 def list_imports():
     """List stored imports without re-inspecting each file."""
 
     items = []
 
-    for sub, kind in [
-        ("databases", "database"),
-        ("sandboxes", "sql_script"),
-    ]:
+    for sub in ["databases", "sandboxes"]:
 
         directory = os.path.join(_upload_root(), sub)
 
@@ -502,7 +818,7 @@ def list_imports():
             items.append(
                 {
                     "id": filename.split("_", 1)[0],
-                    "kind": kind,
+                    "kind": _kind_for(sub, filename),
                     "filename": filename,
                     "path": os.path.join(sub, filename),
                 }
