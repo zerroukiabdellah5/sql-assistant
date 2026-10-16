@@ -471,6 +471,74 @@ def require_ask_access(request: Request):
     return "trial"
 
 
+# Answered when a caller tries to execute SQL without even generating a
+# query first. It is not exhaustion: nothing has been spent, and the fix
+# is to generate SQL, not to unlock. A machine-readable code, like
+# FREE_TRIAL_EXHAUSTED, so the client keys on it rather than on wording.
+RUN_REQUIRES_GENERATION_CODE = "RUN_REQUIRES_GENERATION"
+
+
+def require_run_access(request: Request):
+    """Gate /api/run: executing SQL the user has already reviewed.
+
+    The credentials are the same four as require_ask_access, in the same
+    order, so the run door is no wider than the generation door:
+
+      1. the admin session cookie  -> owner;
+      2. APP_API_KEY from a header -> owner, for scripts;
+      3. a live access cookie      -> visitor with the App Access Code;
+      4. a visitor who has ALREADY spent a free attempt.
+
+    The fourth case is the only difference from require_ask_access. A
+    run is explicitly a second, cheaper step of a question that was
+    already paid for when its SQL was generated, so a visitor who has
+    spent at least one attempt may run. It does NOT charge another
+    attempt (no provider is called here) and it does not mint a token:
+    the counter is only advanced by charge_trial_attempt, which /api/run
+    never calls. A caller with no attempt spent at all is refused, so a
+    brand-new visitor cannot execute hand-written SQL by skipping
+    generation - generation, and the LLM call it costs, remains the way
+    in.
+
+    Every other guarantee of the gate is unchanged: owners and
+    access-code visitors are admitted without being counted, and the
+    refusal is answered before the rate limiter and before any database
+    work.
+    """
+
+    secret = configured_secret()
+
+    session_token = request.cookies.get(config.AUTH_COOKIE_NAME)
+
+    if verify_session_token(session_token, secret=secret):
+
+        request.state.access_type = "session"
+        return "session"
+
+    if credentials_match(presented_credential(request), secret):
+
+        request.state.access_type = "api-key"
+        return "api-key"
+
+    access_token = request.cookies.get(config.ACCESS_COOKIE_NAME)
+
+    if verify_access_token(access_token):
+
+        request.state.access_type = "access-code"
+        return "access-code"
+
+    if used_attempts(request) < 1:
+
+        raise HTTPException(
+            status_code=403,
+            detail=RUN_REQUIRES_GENERATION_CODE,
+        )
+
+    request.state.access_type = "trial"
+
+    return "trial"
+
+
 # ------------------------------------------------------------
 # CHARGING AND DELIVERING THE COUNTER
 # ------------------------------------------------------------

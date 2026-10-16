@@ -49,6 +49,7 @@ REQUIRED_KEYS = {
     "total_matched",
     "truncated",
     "generated_by_ai",
+    "sql_origin",
 }
 
 # Words that would turn a description into a guarantee. Provenance
@@ -151,13 +152,44 @@ def provider_stub(monkeypatch):
     return fake_ask
 
 
+def ask_then_run(client, prompt="show the products", **run_overrides):
+    """Drive the split flow end to end: generate SQL, then run it.
+
+    /api/ask no longer executes, so any test that wants rows or a
+    provenance block has to take the explicit second step. The signed
+    generation ticket is echoed from the generation response exactly as
+    the browser now does, so a provider that recorded itself during
+    generation still reaches the provenance block through the server's
+    own verification rather than through a client-supplied field.
+    ``run_overrides`` lets a test replace or add run fields (for
+    example a hand-edited ``sql``).
+    """
+
+    generated = client.post(
+        "/api/ask", json={"prompt": prompt}
+    )
+
+    assert generated.status_code == 200, generated.text
+
+    body = generated.json()
+
+    payload = {
+        "sql": body.get("sql", ""),
+        "prompt": prompt,
+        "explanation": body.get("explanation", ""),
+        "generation_ticket": body.get("generation_ticket"),
+    }
+
+    payload.update(run_overrides)
+
+    return client.post("/api/run", json=payload)
+
+
 @pytest.fixture
 def asked(authed_client, provider_stub):
-    """A successful /api/ask against the real store.db."""
+    """A successful generate-then-run against the real store.db."""
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    response = ask_then_run(authed_client)
 
     assert response.status_code == 200, response.text
 
@@ -364,9 +396,7 @@ def test_elapsed_ms_excludes_llm_generation_time(
 
     monkeypatch.setattr(main, "ask_active", slow_ask)
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    response = ask_then_run(authed_client)
 
     assert response.status_code == 200
     assert response.json()["provenance"]["elapsed_ms"] < 200
@@ -566,9 +596,7 @@ def test_the_route_executes_sql_exactly_once_per_request(
 ):
     """A count for provenance must not cost a second query."""
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    response = ask_then_run(authed_client)
 
     assert response.status_code == 200
 
@@ -617,9 +645,7 @@ def test_gemini_is_reported_when_gemini_answers(
         stub_ask(provider="gemini", model="gemini-2.5-flash"),
     )
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    response = ask_then_run(authed_client)
 
     block = response.json()["provenance"]
 
@@ -647,9 +673,7 @@ def test_provider_is_not_inferred_when_the_layer_is_silent(
 
     monkeypatch.setattr(main, "ask_active", silent_ask)
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    response = ask_then_run(authed_client)
 
     block = response.json()["provenance"]
 
@@ -804,12 +828,8 @@ def test_one_request_carries_exactly_one_id(asked):
 def test_two_requests_get_two_different_ids(
     authed_client, provider_stub
 ):
-    first = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
-    second = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    first = ask_then_run(authed_client)
+    second = ask_then_run(authed_client)
 
     assert (
         first.json()["provenance"]["request_id"]
@@ -910,9 +930,7 @@ def test_no_provenance_when_sql_execution_fails(
 
     monkeypatch.setattr(main, "execute_sql_with_metadata", explode)
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    response = ask_then_run(authed_client)
 
     assert response.status_code >= 400
     assert "provenance" not in response.json()
@@ -932,9 +950,7 @@ def test_a_missing_digest_still_returns_rows(
 
     monkeypatch.setattr(provenance, "source_sha256", lambda path: None)
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    response = ask_then_run(authed_client)
 
     assert response.status_code == 200
     assert response.json()["data"]
@@ -949,9 +965,7 @@ def test_a_failing_fingerprint_helper_is_contained(
 
     monkeypatch.setattr(provenance, "source_sha256", explode)
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    response = ask_then_run(authed_client)
 
     assert response.status_code == 200
     assert response.json()["data"]
@@ -1125,8 +1139,8 @@ def test_no_prompt_text_in_the_provenance_block(
 ):
     monkeypatch.setattr(main, "ask_active", stub_ask())
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": PROMPT_MARKER}
+    response = ask_then_run(
+        authed_client, prompt=PROMPT_MARKER
     )
 
     assert response.status_code == 200
@@ -1211,8 +1225,8 @@ def test_no_prompt_or_sql_reaches_any_log(
         stub_ask(sql=SQL_MARKER, model="stub-model-1"),
     )
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": PROMPT_MARKER}
+    response = ask_then_run(
+        authed_client, prompt=PROMPT_MARKER
     )
 
     assert response.status_code == 200
@@ -1238,9 +1252,7 @@ def test_no_prompt_or_sql_reaches_any_log(
 def test_the_digest_does_not_reach_the_log(authed_client, access_log):
     """The client gets the digest; the server does not log it."""
 
-    authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    ask_then_run(authed_client)
 
     logged = "\n".join(
         record.getMessage() for record in access_log.records
@@ -1308,11 +1320,11 @@ def test_the_module_says_so_where_a_reader_will_see_it():
 def test_two_identical_requests_describe_the_same_source(
     authed_client, provider_stub
 ):
-    first = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
+    first = ask_then_run(
+        authed_client
     ).json()["provenance"]
-    second = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
+    second = ask_then_run(
+        authed_client
     ).json()["provenance"]
 
     for field in (
@@ -1329,14 +1341,14 @@ def test_each_request_gets_its_own_timestamp(
 ):
     import time
 
-    first = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
+    first = ask_then_run(
+        authed_client
     ).json()["provenance"]
 
     time.sleep(0.005)
 
-    second = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
+    second = ask_then_run(
+        authed_client
     ).json()["provenance"]
 
     assert first["executed_at"] != second["executed_at"]

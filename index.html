@@ -316,15 +316,23 @@
         .suggestion:hover { color: var(--text); background: var(--wash-strong); border-color: var(--border-hover); transform: translateY(-1px); }
 
         .run-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
+        .run-actions { display: flex; align-items: center; gap: 10px; }
         .run-hint { color: var(--muted-2); font-size: 10px; }
-        #runButton {
+        #generateButton, #runButton {
             min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 22px;
             border: 0; border-radius: 12px; color: white; font-size: 12.5px; font-weight: 800; cursor: pointer; transition: .2s var(--ease);
+        }
+        #generateButton {
             background: linear-gradient(112deg, #3aa3aa, #1f6d78 52%, #16505c);
             box-shadow: 0 14px 34px -18px rgba(23, 90, 102, .95), inset 0 1px 0 rgba(255,255,255,.18);
         }
-        #runButton:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 18px 40px -18px rgba(23, 90, 102, .95), 0 0 26px rgba(111, 177, 203, .22); filter: brightness(1.08); }
-        #runButton:disabled { opacity: .58; cursor: wait; filter: saturate(.72); }
+        #runButton {
+            background: linear-gradient(112deg, #4a6b8a, #2c4258 52%, #22313f);
+            box-shadow: 0 14px 34px -18px rgba(34, 49, 63, .95), inset 0 1px 0 rgba(255,255,255,.14);
+        }
+        #generateButton:hover:not(:disabled), #runButton:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 18px 40px -18px rgba(23, 90, 102, .75), 0 0 26px rgba(111, 177, 203, .18); filter: brightness(1.08); }
+        #generateButton:disabled { opacity: .58; cursor: wait; filter: saturate(.72); }
+        #runButton:disabled { opacity: .5; cursor: not-allowed; filter: saturate(.5); }
 
         .panel-title { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
         .panel-title::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: linear-gradient(140deg, var(--accent-2), var(--accent-3)); box-shadow: 0 0 10px rgba(111, 177, 203, .8); flex-shrink: 0; }
@@ -440,7 +448,7 @@
             .result-metrics { justify-content: flex-start; }
             .shortcut, .run-hint, .code-actions { display: none; }
             .run-row { display: block; }
-            #runButton { width: 100%; }
+            #generateButton, #runButton { width: 100%; }
             .schema-tree { grid-template-columns: 1fr; }
             .footer-bar { flex-direction: column; align-items: flex-start; }
             .provenance-head { flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -773,10 +781,16 @@
 
                 <div class="run-row">
                     <div class="run-hint">Follow-ups reuse context — try “them”, “same brand”, “break that down”.</div>
-                    <button id="runButton" onclick="sendQuery()">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7"/></svg>
-                        <span id="runButtonLabel">Generate SQL &amp; Run</span>
-                    </button>
+                    <div class="run-actions">
+                        <button id="generateButton" onclick="sendQuery()">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7"/></svg>
+                            <span id="generateButtonLabel">Generate SQL</span>
+                        </button>
+                        <button id="runButton" onclick="runQuery()" disabled>
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z"/></svg>
+                            <span id="runButtonLabel">Run query</span>
+                        </button>
+                    </div>
                 </div>
             </section>
 
@@ -804,7 +818,7 @@
                     </div>
                     <div class="sql-editor">
                         <div id="lineNumbers" class="line-numbers">1</div>
-                        <code id="sqlOutput">-- SQL query will appear here...</code>
+                        <code id="sqlOutput" contenteditable="true" spellcheck="false" oninput="onSqlInput()" aria-label="Generated SQL (editable)">-- SQL query will appear here...</code>
                     </div>
                 </div>
             </section>
@@ -828,7 +842,7 @@
                             <div class="empty-state-icon">
                                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4-3.58 4-8 4-8-1.79-8-4Zm0 0v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7"/></svg>
                             </div>
-                            Click “Generate SQL &amp; Run” to execute a query.
+                            Generate SQL, review it, then run it.
                         </div>
                     </div>
                 </div>
@@ -880,7 +894,8 @@
         <input id="paletteSearch" class="palette-search" placeholder="Search commands..." autocomplete="off">
         <div id="commandList" class="palette-list">
             <button class="command-item" onclick="focusQuery(); closeCommandPalette()"><span>Focus query input</span><span class="command-key">CTRL + ENTER</span></button>
-            <button class="command-item" onclick="sendQuery(); closeCommandPalette()"><span>Run current query</span><span class="command-key">RUN</span></button>
+            <button class="command-item" onclick="sendQuery(); closeCommandPalette()"><span>Generate SQL from question</span><span class="command-key">GENERATE</span></button>
+            <button class="command-item" onclick="runQuery(); closeCommandPalette()"><span>Run reviewed SQL</span><span class="command-key">RUN</span></button>
             <button class="command-item" onclick="copySql(); closeCommandPalette()"><span>Copy generated SQL</span><span class="command-key">COPY</span></button>
             <button class="command-item" onclick="clearSql(); closeCommandPalette()"><span>Clear SQL editor</span><span class="command-key">CLEAR</span></button>
             <button class="command-item" onclick="clearSession(); closeCommandPalette()"><span>Clear session history</span><span class="command-key">RESET</span></button>
@@ -978,6 +993,11 @@
     /* The backend's own machine-readable code. Keyed on, never on
        the wording of the message. */
     const FREE_TRIAL_EXHAUSTED = "FREE_TRIAL_EXHAUSTED";
+
+    /* The other machine-readable refusal /api/run can answer: a caller
+       who has not generated a query yet (nothing spent, nothing to
+       unlock). Shown as a nudge, never as the access modal. */
+    const RUN_REQUIRES_GENERATION = "RUN_REQUIRES_GENERATION";
 
 
     /* Owner contact, as a link the visitor can actually use. The
@@ -1351,6 +1371,13 @@
     let lastChartKnown = false;
     let currentSessionId = null;
     let resultsChart = null;
+
+    // The signed ticket /api/ask returns for the SQL it generated. It is
+    // echoed back to /api/run so the server can tell generated SQL from
+    // hand-written SQL without trusting anything the browser claims.
+    // It is cleared when the user clears the editor or switches source,
+    // so freshly typed SQL is reported as manual rather than "edited".
+    let lastGenerationTicket = null;
 
     // Which stored import is the active read-only source. null means the
     // default application database, which preserves the original
@@ -1975,7 +2002,7 @@
         document.getElementById(
             "dataOutput"
         ).innerHTML =
-            `Click "Generate SQL & Run" to execute a query.`;
+            `Generate SQL, review it, then run it.`;
 
 
         document.getElementById(
@@ -2087,7 +2114,28 @@
 
     function clearSql() {
 
+        /* Clearing the editor discards the generated statement, so it
+           also discards everything derived from running it. Leaving the
+           rows, count, chart or provenance on screen would describe a
+           statement that no longer exists, and leaving Run enabled
+           would let the placeholder be submitted to /api/run. The
+           ticket goes too: nothing typed next can be called generated
+           or edited, because it has no model-written base. */
         lastSql = "";
+        lastPrompt = "";
+        lastExplanation = "";
+        lastGenerationTicket = null;
+        lastResultData = [];
+        lastCount = 0;
+        lastTruncated = false;
+        lastQueryTime = null;
+        lastChart = null;
+        lastChartKnown = false;
+
+        clearProvenance();
+        hideChart();
+        setRunEnabled(false);
+        updateExportStates();
 
         document.getElementById(
             "sqlOutput"
@@ -2099,6 +2147,23 @@
         ).textContent =
             "Ready";
 
+        const data = document.getElementById("dataOutput");
+        if (data) {
+            data.innerHTML = 'Generate SQL, review it, then run it.';
+            data.classList.add("items-center", "justify-center");
+        }
+
+        const metric = document.getElementById("resultMetric");
+        if (metric) {
+            metric.textContent = "0 rows";
+        }
+
+        const explanation = document.getElementById("explanationBox");
+        if (explanation) {
+            explanation.classList.add("hidden");
+            explanation.textContent = "";
+        }
+
         updateLineNumbers();
 
         showToast("SQL editor cleared");
@@ -2109,7 +2174,82 @@
        LOADING
     ===================================================== */
 
-    function setLoading(isLoading) {
+    function setRunEnabled(enabled) {
+
+        const button =
+            document.getElementById(
+                "runButton"
+            );
+
+        if (button) {
+            button.disabled = !enabled;
+        }
+    }
+
+
+    /* The editor is the source of truth for what will run. The user may
+       have edited the model's SQL, so what executes is exactly what is
+       in the box now, never the string that was generated. innerText
+       keeps the line breaks the user sees (textContent would too, but
+       innerText already reflects any browser-normalised spacing). */
+    function readSqlFromEditor() {
+
+        const editor =
+            document.getElementById(
+                "sqlOutput"
+            );
+
+        if (!editor) {
+            return "";
+        }
+
+        return (
+            editor.innerText ||
+            editor.textContent ||
+            ""
+        )
+            .replace(/\u00a0/g, " ")
+            .trim();
+    }
+
+
+    function setGenerating(isLoading) {
+
+        const button =
+            document.getElementById(
+                "generateButton"
+            );
+
+        const label =
+            document.getElementById(
+                "generateButtonLabel"
+            );
+
+        if (button) {
+            button.disabled = isLoading;
+        }
+
+        if (label) {
+            label.innerHTML =
+                isLoading
+                    ? `<span class="thinking">
+                           Generating SQL...
+                       </span>`
+                    : "Generate SQL";
+        }
+
+        /* Only ever set while working. The success and failure paths set
+           the final status themselves, and clearing it here would wipe
+           "SQL ready — review and run" the moment generation ends. */
+        if (isLoading) {
+            document.getElementById(
+                "sqlStatus"
+            ).textContent = "Generating";
+        }
+    }
+
+
+    function setRunning(isLoading) {
 
         const button =
             document.getElementById(
@@ -2121,30 +2261,103 @@
                 "runButtonLabel"
             );
 
-        button.disabled =
-            isLoading;
+        if (button) {
+            button.disabled = isLoading;
+        }
+
+        if (label) {
+            label.innerHTML =
+                isLoading
+                    ? `<span class="thinking">
+                           Running...
+                       </span>`
+                    : "Run query";
+        }
+
+        if (isLoading) {
+            document.getElementById(
+                "sqlStatus"
+            ).textContent = "Running";
+        }
+    }
 
 
-        label.innerHTML =
-            isLoading
-                ? `<span class="thinking">
-                       AI is generating...
-                   </span>`
-                : "Generate SQL & Run";
+    /* Fired on every edit of the SQL box. What the user typed becomes
+       the pending statement, the Run button follows whether there is
+       anything to run, and the previous result set is cleared: rows
+       must never sit next to SQL they did not come from. */
+    function onSqlInput() {
 
+        updateLineNumbers();
 
-        document.getElementById(
-            "sqlStatus"
-        ).textContent =
-            isLoading
-                ? "Generating"
-                : "Ready";
+        let text =
+            readSqlFromEditor();
+
+        if (
+            text ===
+            "-- SQL query will appear here..."
+        ) {
+            text = "";
+        }
+
+        lastSql = text;
+
+        setRunEnabled(
+            text.length > 0
+        );
+
+        const hasResults =
+            lastResultData.length > 0 ||
+            lastProvenance !== null;
+
+        if (hasResults) {
+
+            lastResultData = [];
+            lastCount = 0;
+            lastTruncated = false;
+            lastChart = null;
+            lastChartKnown = false;
+
+            hideChart();
+            clearProvenance();
+
+            const data =
+                document.getElementById(
+                    "dataOutput"
+                );
+
+            if (data) {
+                data.innerHTML =
+                    'SQL changed — run it again to refresh these results.';
+                data.classList.add(
+                    "items-center",
+                    "justify-center"
+                );
+            }
+
+            document.getElementById(
+                "resultMetric"
+            ).textContent = "0 rows";
+
+            updateExportStates();
+        }
+
+        if (text.length > 0) {
+            document.getElementById(
+                "sqlStatus"
+            ).textContent = "SQL edited — run to refresh";
+        }
     }
 
 
     /* =====================================================
-       MAIN API
-       KEEPING /api/ask UNCHANGED
+       MAIN API — TWO STEPS
+
+       /api/ask only GENERATES SQL: the model is called, the statement
+       is shown to the user, and nothing is executed. /api/run executes
+       the SQL that is in the editor when the user asks for it. Keeping
+       them apart is the point: the user always sees the SQL before it
+       runs, and editing it changes what runs.
     ===================================================== */
 
     async function sendQuery() {
@@ -2167,7 +2380,7 @@
         }
 
 
-        setLoading(true);
+        setGenerating(true);
 
 
         try {
@@ -2237,26 +2450,31 @@
             }
 
 
+            /* Generation returns SQL and how it was written. NOTHING
+               has executed: no rows, no count, no chart, no provenance.
+               Those belong to /api/run. */
             lastSql =
                 result.sql || "";
 
-
-            lastResultData =
-                result.data || [];
-
-
             lastPrompt = prompt;
             lastExplanation = result.explanation || "";
-            lastCount = result.count || 0;
-            lastTruncated = Boolean(result.truncated);
-            lastProvenance = result.provenance || null;
-            lastVerification = result.verification || null;
-            lastChart = result.chart || null;
-            lastChartKnown = Object.prototype.hasOwnProperty.call(
-                result,
-                "chart"
-            );
-            lastQueryTime = new Date();
+
+            /* The signed ticket that proves this SQL came from a model.
+               Sent back to /api/run so the server can decide provenance
+               itself. Kept across in-place edits so an edited statement
+               is still traceable to the model that wrote its base. */
+            lastGenerationTicket =
+                result.generation_ticket || null;
+
+            /* A fresh statement invalidates whatever is on screen. */
+            lastResultData = [];
+            lastCount = 0;
+            lastTruncated = false;
+            lastChart = null;
+            lastChartKnown = false;
+            lastQueryTime = null;
+            lastProvenance = null;
+            lastVerification = null;
 
 
             document.getElementById(
@@ -2266,26 +2484,6 @@
 
 
             updateLineNumbers();
-
-
-            const count =
-                result.count || 0;
-
-
-            document.getElementById(
-                "sqlStatus"
-            ).textContent =
-                lastTruncated
-                    ? `${count} rows (truncated)`
-                    : `${count} rows`;
-
-
-            document.getElementById(
-                "resultMetric"
-            ).textContent =
-                lastTruncated
-                    ? `${count} row${count === 1 ? "" : "s"} (truncated)`
-                    : `${count} row${count === 1 ? "" : "s"}`;
 
 
             const explanationBox =
@@ -2311,6 +2509,277 @@
             }
 
 
+            /* The results panel is reset to the review-then-run state:
+               the SQL is on screen, the rows are not, and the user is
+               told what to do next. */
+            const dataOutput =
+                document.getElementById(
+                    "dataOutput"
+                );
+
+            dataOutput.innerHTML =
+                'SQL generated. Review it, edit it if you need to, then click "Run query".';
+
+            dataOutput.classList.add(
+                "items-center",
+                "justify-center"
+            );
+
+
+            document.getElementById(
+                "resultMetric"
+            ).textContent = "0 rows";
+
+
+            document.getElementById(
+                "sqlStatus"
+            ).textContent =
+                "SQL ready — review and run";
+
+
+            setRunEnabled(
+                lastSql.trim().length > 0
+            );
+
+
+            hideChart();
+            clearProvenance();
+            updateExportStates();
+
+
+            sessionHistory.push({
+                prompt,
+                sql: lastSql
+            });
+
+            if (sessionHistory.length > MAX_SESSION_TURNS) {
+                sessionHistory =
+                    sessionHistory.slice(-MAX_SESSION_TURNS);
+            }
+
+
+            renderHistory();
+
+
+            scrollToLatestHistory();
+
+
+            document
+                .getElementById(
+                    "sqlOutput"
+                )
+                .scrollIntoView({
+                    behavior: "smooth",
+                    block: "nearest"
+                });
+
+
+            showToast(
+                "SQL ready — review it, then run it"
+            );
+
+
+        } catch (error) {
+
+            document.getElementById(
+                "sqlStatus"
+            ).textContent =
+                "Error";
+
+
+            document.getElementById(
+                "dataOutput"
+            ).innerHTML = `
+                <p class="text-[#fb7185] px-4 py-8">
+                    ${escapeHtml(
+                        error.message ||
+                        "Error connecting to server backend."
+                    )}
+                </p>
+            `;
+
+
+            hideChart();
+
+
+            clearProvenance();
+
+
+            document.getElementById(
+                "exportButton"
+            ).disabled =
+                true;
+
+
+            const pdfButton =
+                document.getElementById(
+                    "exportPdfButton"
+                );
+
+            if (pdfButton) {
+                pdfButton.disabled = true;
+            }
+
+
+            document.getElementById(
+                "resultMetric"
+            ).textContent =
+                "Error";
+
+
+        } finally {
+
+            setGenerating(false);
+        }
+    }
+
+
+    /* =====================================================
+       RUN REVIEWED SQL
+
+       Executes whatever is in the editor, and only that. The server
+       re-validates it, so an edit that turns a SELECT into a write is
+       refused there rather than trusted here. A visitor who has not
+       generated anything yet is answered with RUN_REQUIRES_GENERATION
+       and nudged instead of shown the access modal (nothing is
+       exhausted; there is simply nothing to run).
+    ===================================================== */
+
+    async function runQuery() {
+
+        const sql =
+            readSqlFromEditor();
+
+
+        if (!sql) {
+
+            showToast(
+                "Generate or write a query first"
+            );
+
+            focusQuery();
+
+            return;
+        }
+
+
+        setRunning(true);
+
+
+        try {
+
+            const response =
+                await fetch(
+                    "/api/run",
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body:
+                            JSON.stringify({
+                                sql,
+                                prompt: lastPrompt,
+                                explanation:
+                                    lastExplanation,
+                                /* The signed ticket from the last
+                                   generation. The server is the only
+                                   judge of provenance; this is a
+                                   signature, not a claim. */
+                                generation_ticket:
+                                    lastGenerationTicket ||
+                                    undefined,
+                                /* Same source selection as generation,
+                                   so the SQL runs against the database
+                                   it was written for. */
+                                import_id: selectedImportId || undefined
+                            })
+                    }
+                );
+
+            const result =
+                await response.json();
+
+
+            if (
+                response.status === 403 &&
+                result.detail === RUN_REQUIRES_GENERATION
+            ) {
+
+                showToast(
+                    "Generate SQL first, then run it"
+                );
+
+                return;
+
+            }
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    result.detail ||
+                    "The query could not be run."
+                );
+            }
+
+
+            /* The executed statement is whatever the server echoes
+               back; it equals the editor content and is now the SQL of
+               record for a CSV, a PDF or a chart download. */
+            lastSql =
+                result.sql || sql;
+
+            lastResultData =
+                result.data || [];
+
+            lastPrompt = result.prompt || lastPrompt;
+            lastExplanation =
+                result.explanation || lastExplanation;
+            lastCount = result.count || 0;
+            lastTruncated = Boolean(result.truncated);
+            lastProvenance = result.provenance || null;
+            lastVerification = result.verification || null;
+            lastChart = result.chart || null;
+            lastChartKnown = Object.prototype.hasOwnProperty.call(
+                result,
+                "chart"
+            );
+            lastQueryTime = new Date();
+
+
+            document.getElementById(
+                "sqlOutput"
+            ).textContent =
+                lastSql;
+
+
+            updateLineNumbers();
+
+
+            const count =
+                lastCount;
+
+
+            document.getElementById(
+                "sqlStatus"
+            ).textContent =
+                lastTruncated
+                    ? `${count} rows (truncated)`
+                    : `${count} rows`;
+
+
+            document.getElementById(
+                "resultMetric"
+            ).textContent =
+                lastTruncated
+                    ? `${count} row${count === 1 ? "" : "s"} (truncated)`
+                    : `${count} row${count === 1 ? "" : "s"}`;
+
+
             renderTable(
                 lastResultData
             );
@@ -2330,23 +2799,9 @@
             );
 
 
-            sessionHistory.push({
-                prompt,
-                sql: lastSql
-            });
-
-            if (sessionHistory.length > MAX_SESSION_TURNS) {
-                sessionHistory =
-                    sessionHistory.slice(-MAX_SESSION_TURNS);
-            }
+            updateExportStates();
 
 
-            renderHistory();
-
-
-
-
-            scrollToLatestHistory();
             requestAnimationFrame(() => {
 
                 document
@@ -2418,7 +2873,7 @@
 
         } finally {
 
-            setLoading(false);
+            setRunning(false);
         }
     }
 
@@ -3489,6 +3944,19 @@
 
     function provenanceModel(block) {
 
+        /* The server decides sql_origin from a signed ticket, so this
+           only labels what the server already proved: a model wrote the
+           SQL, a model wrote its base and the user edited it, or the
+           user wrote it by hand. A manual statement names no model,
+           because none wrote it. */
+        const origin =
+            provenanceValue(block.sql_origin);
+
+        if (origin === "manual") {
+
+            return "manually written";
+        }
+
         const parts = [
             provenanceValue(block.provider),
             provenanceValue(block.model)
@@ -3496,9 +3964,16 @@
             part => part !== PROVENANCE_UNAVAILABLE
         );
 
-        return parts.length
-            ? parts.join(" / ")
-            : PROVENANCE_UNAVAILABLE;
+        if (!parts.length) {
+
+            return PROVENANCE_UNAVAILABLE;
+        }
+
+        const label = parts.join(" / ");
+
+        return origin === "edited"
+            ? `${label} (edited)`
+            : label;
     }
 
 
@@ -3748,6 +4223,16 @@
         const hasSql =
             lastSql.trim().length > 0;
 
+        /* The PDF is an EXECUTION report: it carries the rows, the
+           count and the provenance of a completed run. Offering it for
+           SQL that has only been generated would print a document
+           describing an execution that never happened, so it waits for
+           a successful run (which is what sets lastQueryTime). A
+           generated-but-unrun statement can still be copied with
+           copySql(). */
+        const executed =
+            lastQueryTime !== null;
+
         const csvButton =
             document.getElementById(
                 "exportButton"
@@ -3763,7 +4248,7 @@
             );
 
         if (pdfButton) {
-            pdfButton.disabled = !hasSql;
+            pdfButton.disabled = !(hasSql && executed);
         }
 
         const chartButton =
@@ -3923,7 +4408,11 @@
 
     async function exportPdf() {
 
-        if (!lastSql.trim()) {
+        /* The report describes a run, so require one. Checking
+           lastQueryTime as well as the SQL keeps a generated-but-unrun
+           statement from producing an empty execution report even if
+           this is reached without going through the button. */
+        if (!lastSql.trim() || lastQueryTime === null) {
 
             showToast(
                 "Run a query before exporting PDF"
@@ -4631,7 +5120,13 @@
 
                     event.preventDefault();
 
-                    sendQuery();
+                    /* Ctrl+Enter generates; Ctrl+Shift+Enter runs the
+                       SQL that is already in the editor. */
+                    if (event.shiftKey) {
+                        runQuery();
+                    } else {
+                        sendQuery();
+                    }
                 }
 
             }
@@ -4810,6 +5305,7 @@
         lastSql = "";
         lastPrompt = "";
         lastExplanation = "";
+        lastGenerationTicket = null;
         lastCount = 0;
         lastTruncated = false;
         lastQueryTime = null;
@@ -4827,7 +5323,7 @@
         }
         const data = document.getElementById("dataOutput");
         if (data) {
-            data.innerHTML = 'Click "Generate SQL & Run" to execute a query.';
+            data.innerHTML = 'Generate SQL, review it, then run it.';
             data.classList.add("items-center", "justify-center");
         }
         const metric = document.getElementById("resultMetric");
@@ -4839,6 +5335,7 @@
             explanation.classList.add("hidden");
             explanation.textContent = "";
         }
+        setRunEnabled(false);
         hideChart();
         updateExportStates();
     }
@@ -5537,7 +6034,10 @@
 
     async function serverPdf() {
 
-        if (!lastSql) {
+        /* Guard on the execution, not just the SQL: this is an
+           execution report, so there must be a completed run behind it
+           (lastQueryTime) and the rows it produced. */
+        if (!lastSql || lastQueryTime === null) {
 
             showToast("Run a query first");
             return;

@@ -29,7 +29,10 @@ def test_ask_uses_selected_import_database_and_not_store_db(authed_client,monkey
         calls.append(database_path)
         return 'SELECT * FROM import_items','r'
     monkeypatch.setattr(main,'ask_active',fake_ask)
-    resp=c.post('/api/ask',json={'prompt':'x','import_id':iid})
+    gen=c.post('/api/ask',json={'prompt':'x','import_id':iid})
+    assert gen.status_code==200
+    g=gen.json()
+    resp=c.post('/api/run',json={'sql':g['sql'],'import_id':iid,'generation_ticket':g.get('generation_ticket')})
     assert resp.status_code==200
     assert resp.json()['data']==[{'id':1,'label':'imported'}]
     assert calls and calls[0] is not None

@@ -409,7 +409,12 @@ def rate_limit(scope, limit, window_seconds, pre_auth=False):
     return dependency
 
 
-def rate_limit_visitor(scope, limit, window_seconds):
+def rate_limit_visitor(
+    scope,
+    limit,
+    window_seconds,
+    access_dependency=require_ask_access,
+):
     """Build a dependency limiting a route that needs no APP_API_KEY.
 
     /api/ask is reachable by a visitor with no credential, so the
@@ -418,6 +423,15 @@ def rate_limit_visitor(scope, limit, window_seconds):
     this route now serves. Everything else is identical - the same
     process-wide limiter, the same scope isolation, the same 429 plus
     Retry-After, and the same ordering.
+
+    ``access_dependency`` is the gate that decides which of the four
+    credentials applies. It defaults to require_ask_access, so every
+    existing caller is unchanged. /api/run passes require_run_access,
+    which differs only in admitting a visitor who has already spent an
+    attempt; the identity it derives is otherwise the same, and it is
+    still settled BEFORE the counter is touched. It is read only: a
+    refused caller is answered by the gate first and never spends any
+    of this bucket.
 
     require_ask_access is declared as a sub-dependency so access is
     settled BEFORE the counter is touched, in the same
@@ -428,7 +442,7 @@ def rate_limit_visitor(scope, limit, window_seconds):
 
     def dependency(
         request: Request,
-        access_type: str = Depends(require_ask_access),
+        access_type: str = Depends(access_dependency),
     ):
 
         _enforce(

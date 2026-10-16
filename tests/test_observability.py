@@ -760,6 +760,12 @@ def test_ask_provider_failure_is_generic(
 
 
 def test_ask_database_failure_is_generic(authed_client, monkeypatch):
+    """A database error during the run is generic, never the path.
+
+    Execution moved to /api/run, so the leak this guards against (a
+    sqlite message carrying the deployment path) is now exercised there.
+    """
+
     def explode(sql, path=None):
         raise sqlite3.DatabaseError(
             f"file is not a database: {PATH_MARKER}"
@@ -770,7 +776,8 @@ def test_ask_database_failure_is_generic(authed_client, monkeypatch):
     )
 
     response = authed_client.post(
-        "/api/ask", json={"prompt": PROMPT_MARKER}
+        "/api/run",
+        json={"sql": "SELECT 1", "prompt": PROMPT_MARKER},
     )
 
     assert response.status_code == 500

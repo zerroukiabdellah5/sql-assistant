@@ -14,6 +14,8 @@ import pytest
 from app import analytics
 from app import main as main_mod
 
+from tests.test_provenance import ask_then_run
+
 
 def _plan(rows):
     return analytics.plan_chart(rows)
@@ -337,8 +339,8 @@ def test_ask_returns_a_chart_built_from_the_rows(
 
     monkeypatch.setattr(main_mod, "ask_active", fake_ask)
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "products and prices"}
+    response = ask_then_run(
+        authed_client, prompt="products and prices"
     )
 
     assert response.status_code == 200, response.text
@@ -365,8 +367,8 @@ def test_ask_still_works_without_a_chart(authed_client, monkeypatch):
 
     monkeypatch.setattr(main_mod, "ask_active", fake_ask)
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "product names"}
+    response = ask_then_run(
+        authed_client, prompt="product names"
     )
 
     assert response.status_code == 200, response.text

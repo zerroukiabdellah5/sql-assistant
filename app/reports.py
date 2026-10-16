@@ -373,6 +373,13 @@ def build_report_pdf(
         leading=13,
     )
 
+    # A backColor paragraph draws its padded box outside the height
+    # that wrap() reports, so borderPadding spills into the flowable
+    # above it. Matching top/bottom spacing reserves that room; without
+    # it the box overdraws the section heading above ("Generated SQL",
+    # "Database Schema") and clips it.
+    box_padding = 6
+
     mono_style = ParagraphStyle(
         name="Mono",
         fontName="Courier",
@@ -380,7 +387,9 @@ def build_report_pdf(
         leading=10,
         textColor=colors.HexColor("#334155"),
         backColor=colors.HexColor("#F8FAFC"),
-        borderPadding=6,
+        borderPadding=box_padding,
+        spaceBefore=box_padding,
+        spaceAfter=box_padding,
     )
 
     schema_style = ParagraphStyle(
@@ -390,7 +399,9 @@ def build_report_pdf(
         leading=9,
         textColor=colors.HexColor("#475569"),
         backColor=colors.HexColor("#F8FAFC"),
-        borderPadding=6,
+        borderPadding=box_padding,
+        spaceBefore=box_padding,
+        spaceAfter=box_padding,
     )
 
     flowables = []

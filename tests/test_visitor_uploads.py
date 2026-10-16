@@ -165,9 +165,20 @@ def test_an_anonymous_visitor_queries_their_own_upload(
 ):
     created = _upload(anon_client, _db_bytes(tmp_path)).json()
 
-    response = anon_client.post(
+    generated = anon_client.post(
         "/api/ask",
         json={"prompt": "list items", "import_id": created["id"]},
+    )
+
+    assert generated.status_code == 200
+
+    response = anon_client.post(
+        "/api/run",
+        json={
+            "sql": generated.json()["sql"],
+            "import_id": created["id"],
+            "generation_ticket": generated.json().get("generation_ticket"),
+        },
     )
 
     assert response.status_code == 200
@@ -240,9 +251,20 @@ def test_an_excel_upload_is_listed_described_and_queryable(
 
     monkeypatch.setattr("app.main.ask_active", fake_ask)
 
-    response = anon_client.post(
+    generated = anon_client.post(
         "/api/ask",
         json={"prompt": "list sales", "import_id": created["id"]},
+    )
+
+    assert generated.status_code == 200
+
+    response = anon_client.post(
+        "/api/run",
+        json={
+            "sql": generated.json()["sql"],
+            "import_id": created["id"],
+            "generation_ticket": generated.json().get("generation_ticket"),
+        },
     )
 
     assert response.status_code == 200

@@ -130,6 +130,10 @@ def test_the_public_surface_is_exactly_the_deliberate_routes():
     app/access.py rather than by the router: an owner session, the
     application access key, an App Access Code, or a free attempt.
 
+    /api/run is here for the same reason, with require_run_access:
+    the same credentials, except that a visitor qualifies by having
+    already spent an attempt to generate the SQL they are now running.
+
     /api/public/schema is the read-only schema a visitor needs on
     arrival. The /api/access/* pair is how a visitor unlocks or asks for
     a code.
@@ -168,6 +172,7 @@ def test_the_public_surface_is_exactly_the_deliberate_routes():
         ("POST", "/api/access/request", "/api/access/request"),
         ("POST", "/api/access/unlock", "/api/access/unlock"),
         ("POST", "/api/ask", "/api/ask"),
+        ("POST", "/api/run", "/api/run"),
         (
             "POST",
             "/api/visitor/approvals/{approval_id}/approve",

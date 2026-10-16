@@ -21,8 +21,9 @@
 **TIIX SQL Studio** is a natural-language interface to a SQLite database. A
 user types a question such as *"Which product category has the highest total
 sales?"*, and the application translates it into a single, validated,
-read-only SQL query, executes it, and returns the rows, the generated SQL and
-a short explanation.
+read-only SQL query. The user reviews (and may edit) the generated SQL in an
+editable box, then runs it explicitly; the application returns the rows, the
+generated SQL and a short explanation.
 
 The project targets a common gap between non-technical users and relational
 data: people understand the questions they want to ask but not the SQL needed
@@ -45,27 +46,35 @@ query as untrusted input.
 
 ## How It Works
 
+The workflow is deliberately two steps, so the user always sees the SQL
+before anything runs against the database:
+
 1. **Question → prompt.** The user's natural-language question is combined
    with a compact description of the database schema (table, column and
    foreign-key metadata only) and, optionally, the recent turns of the
    current session.
-2. **Prompt → SQL.** The configured large language model provider returns a
-   candidate SQL query plus a plain-English explanation.
+2. **Prompt → SQL (generation only).** The configured large language model
+   provider returns a candidate SQL query plus a plain-English explanation.
+   `POST /api/ask` returns the SQL, the explanation, the answering
+   provider/model and a signed generation ticket. **Nothing is executed.**
 3. **Validation.** Every candidate query passes through a validation layer
    that:
    - accepts only statements beginning with `SELECT` or `WITH`,
    - rejects multiple/stacked statements,
    - rejects `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`,
      `TRUNCATE`, `REPLACE`, `ATTACH` and `DETACH`.
-4. **Plan check.** Before execution, the query plan is inspected to confirm
-   the statement is read-only.
-5. **Read-only execution.** The database is opened in SQLite read-only mode
-   (`mode=ro`), results are fetched in batches and capped at a maximum number
-   of rows.
-6. **Response.** The API returns the SQL, the explanation, the data, a
-   truncated flag, a provenance block (provider, model, timing, row counts)
-   and a correctness/verification note (the rows are produced reliably; the
-   system does not claim the query answers the question).
+4. **Review.** The SQL is shown in an editable box so the user can read and
+   change it before running.
+5. **Run (execution only).** `POST /api/run` re-validates the statement it is
+   handed (the user may have edited it), inspects the query plan to confirm it
+   is read-only, opens the database in SQLite read-only mode (`mode=ro`),
+   fetches results in batches capped at a maximum number of rows, and returns
+   them. This step never calls a provider and never charges a trial attempt.
+6. **Response.** The run response returns the SQL, the explanation, the data,
+   a truncated flag, a provenance block (provider, model, `sql_origin`,
+   timing, row counts) and a correctness/verification note (the rows are
+   produced reliably; the system does not claim the query answers the
+   question).
 
 ## Features
 
@@ -325,7 +334,8 @@ account, no sign-up, nothing stored server-side.
 
 | | What happens |
 |---|---|
-| Attempts 1–6 | The question is answered normally: schema-aware prompt, generated SQL, validation, read-only execution, results. |
+| Attempts 1–6 | The question is answered normally: schema-aware prompt, generated SQL, validation. The signed generation ticket that comes back then lets the visitor **run** that SQL (reviewed or edited) against the read-only database. |
+| Running the SQL | `POST /api/run` executes the reviewed statement and is **free**: it costs no attempt, because no provider is called. A visitor qualifies to run once they have generated at least one statement; a visitor who has never generated gets `403 {"detail": "RUN_REQUIRES_GENERATION"}`. |
 | Attempt 7 | `/api/ask` answers `403` with the flat body `{"detail": "FREE_TRIAL_EXHAUSTED", ...}`. The frontend keys on that machine-readable value and opens the access-code dialog — it never triggers on page load or on opening a panel. |
 | In the dialog | The message states that the six-use trial has ended and offers the two ways forward: enter an App Access Code, or contact the owner. When `OWNER_CONTACT_EMAIL` is configured, the address is rendered as a clickable `mailto:` link that opens the visitor's own mail client. |
 | Valid code | `/api/access/unlock` checks it in constant time, sets an `HttpOnly` session cookie and drops the trial counter. The visitor keeps asking. |
@@ -454,7 +464,8 @@ by the current code.
 
 `NVIDIA_BASE_URL`, `AUTH_COOKIE_NAME`, `AUTH_SESSION_TTL_SECONDS`,
 `AUTH_COOKIE_SECURE`, `APP_RATE_LIMIT_ENABLED`, `ASK_RATE_LIMIT_REQUESTS`,
-`ASK_RATE_LIMIT_WINDOW_SECONDS`, `LOGIN_RATE_LIMIT_REQUESTS`,
+`ASK_RATE_LIMIT_WINDOW_SECONDS`, `RUN_RATE_LIMIT_REQUESTS`,
+`RUN_RATE_LIMIT_WINDOW_SECONDS`, `LOGIN_RATE_LIMIT_REQUESTS`,
 `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `UPLOAD_RATE_LIMIT_REQUESTS`,
 `UPLOAD_RATE_LIMIT_WINDOW_SECONDS`, `ACCESS_UNLOCK_RATE_LIMIT_REQUESTS`,
 `ACCESS_UNLOCK_RATE_LIMIT_WINDOW_SECONDS`, `ACCESS_REQUEST_RATE_LIMIT_REQUESTS`,
@@ -491,7 +502,8 @@ Open that URL in a browser. Useful endpoints:
 | `GET /about`, `/contact`, `/privacy` | Informational pages |
 | `GET /api/version` | Version and provider-configured flags |
 | `GET /api/schema` | Schema metadata (protected) |
-| `POST /api/ask` | Natural-language query endpoint |
+| `POST /api/ask` | Generation endpoint: natural-language question → SQL + signed ticket. Never executes. |
+| `POST /api/run` | Execution endpoint: reviewed SQL → rows, provenance and chart. Never calls a provider and never charges a trial attempt. |
 
 ## Running the Tests
 
@@ -511,7 +523,7 @@ python -m pytest -q
 Current status of the suite:
 
 ```
-875 passed, 2 skipped
+981 passed, 2 skipped
 ```
 
 The two skipped tests are the opt-in Cloudflare R2 integration tests
@@ -576,7 +588,7 @@ The following properties are enforced by the current implementation:
 - **The demo UI never asks a visitor to sign in, and the trial gate is not a
   pop-up.** Every panel the interface exposes — query assistant, schema,
   history, charts, upload, Sessions, Approvals and PDF reports — is served by
-  an unguarded route (`/api/ask`, `/api/public/schema`, or the
+  an unguarded route (`/api/ask`, `/api/run`, `/api/public/schema`, or the
   `/api/visitor/*` namespace), so nothing on page load and no button in the
   workspace can raise the sign-in dialog. The owner routes
   (`/api/sessions`, `/api/approvals`, `/api/report`, `/api/upload`,

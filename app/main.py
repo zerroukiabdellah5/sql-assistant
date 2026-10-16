@@ -69,6 +69,8 @@ from app.config import (
     OWNER_CONTACT_EMAIL,
     PRIVACY_PATH,
     PUBLIC_DIR,
+    RUN_RATE_LIMIT_REQUESTS,
+    RUN_RATE_LIMIT_WINDOW_SECONDS,
     UPLOAD_RATE_LIMIT_REQUESTS,
     UPLOAD_RATE_LIMIT_WINDOW_SECONDS,
 )
@@ -79,7 +81,7 @@ from app.llm import (
     ask_active,
     get_provider,
 )
-from app import analytics, correctness, provenance
+from app import analytics, correctness, generation_ticket, provenance
 from app.ratelimit import (
     APPROVAL_RATE_LIMIT_REQUESTS,
     APPROVAL_RATE_LIMIT_WINDOW_SECONDS,
@@ -93,6 +95,7 @@ from app.ratelimit import (
 )
 from app.reports import build_report_pdf
 from app.schema import get_schema
+from app.validate import validate_sql
 
 logger = logging.getLogger("app.main")
 
@@ -317,6 +320,37 @@ class QueryRequest(BaseModel):
     # Optional sandbox selection. When set, the named stored import is
     # inspected, queried and reported on instead of the default
     # application database. Absent means the default, unchanged.
+    import_id: Optional[str] = None
+
+
+class RunRequest(BaseModel):
+    """Execute SQL the user has already seen and (optionally) edited.
+
+    ``sql`` is the reviewed statement and is treated as untrusted input:
+    it is validated again server-side before anything runs. The
+    remaining fields are the context the client already holds from the
+    generation step - the question, the explanation and the signed
+    generation ticket. They are echoed back so the response carries the
+    same shape the old combined call did.
+
+    The ticket is the ONLY thing that decides whether the statement is
+    reported as model-generated. ``provider`` and ``model`` are no longer
+    accepted: provenance names a model only when a valid, server-signed
+    ticket proves one wrote the SQL, so a client cannot label
+    hand-written statements as AI output. A missing or forged ticket
+    makes the statement "manual".
+    """
+
+    sql: str
+    prompt: str = ""
+    explanation: str = ""
+
+    # The signed ticket /api/ask issued for the SQL it generated, echoed
+    # back unchanged. Verified, never trusted: see app/generation_ticket.
+    generation_ticket: Optional[str] = None
+
+    # Optional sandbox selection, echoed from the generation call so the
+    # statement runs against the same source it was written for.
     import_id: Optional[str] = None
 
 
@@ -1364,10 +1398,15 @@ def ask_ai(payload: QueryRequest, request: Request):
             **ask_kwargs,
         )
 
-        data, execution = execute_sql_with_metadata(
-            generated_sql,
-            path=database_path,
-        )
+        # Generation NEVER executes. The statement the model wrote is
+        # checked for safety - SELECT-only, a single statement, no
+        # write of any kind - so an obviously unsafe answer is refused
+        # with a 400 before it is ever shown, exactly as the old
+        # combined call refused it. It is NOT run and NOT compiled
+        # against a database here: rows are the run step's business,
+        # and running only happens when the user has seen the SQL and
+        # asked for it (/api/run).
+        validate_sql(generated_sql)
 
         if session_id:
 
@@ -1381,8 +1420,6 @@ def ask_ai(payload: QueryRequest, request: Request):
                     session_visitor, session_id, "assistant",
                     sql=generated_sql,
                     explanation=explanation,
-                    count=len(data),
-                    truncated=execution.truncated,
                 )
 
             else:
@@ -1395,52 +1432,30 @@ def ask_ai(payload: QueryRequest, request: Request):
                     session_id, "assistant",
                     sql=generated_sql,
                     explanation=explanation,
-                    count=len(data),
-                    truncated=execution.truncated,
                 )
 
+        # A generation answer: the SQL and how it was written, nothing
+        # that only an execution can produce. data, count, truncated,
+        # chart, provenance and verification are all absent because
+        # nothing has been executed; the client gets them from /api/run.
+        #
+        # The ticket is a signed record of (provider, model, sql). It is
+        # returned so /api/run can tell generated SQL from hand-written
+        # SQL without trusting a client-supplied field: see
+        # app/generation_ticket. It may be None if the server secret is
+        # unavailable, in which case a later run simply reports "manual".
         return {
             "success": True,
             "prompt": prompt,
             "sql": generated_sql,
             "explanation": explanation,
-            "data": data,
-            "count": len(data),
-            "truncated": execution.truncated,
-
-            # Additive: a chart plan derived from the ACTUAL rows
-            # above, or null when no chart fits the result shape.
-            # It plots only columns the rows contain, keeps a NULL a
-            # gap and a negative value negative, and never invents a
-            # point. Planning cannot raise on a well-formed result,
-            # so it cannot fail a query that already succeeded.
-            "chart": analytics.plan_chart(data, generated_sql),
-
-            # Additive: everything above is unchanged. Describes how the
-            # rows were produced; says nothing about whether they answer
-            # the question. Built by a module whose helpers degrade to
-            # null, so it cannot fail a query that already succeeded.
-            "provenance": provenance.build_provenance(
-                database_path=execution.database_path,
-                request_id=observability.request_id_of(request),
-                provider=generation.provider,
-                model=generation.model,
-                executed_at=execution.executed_at,
-                elapsed=execution.elapsed_ms,
-                rows_returned=execution.rows_returned,
-                truncated=execution.truncated,
-                total_matched=execution.total_matched,
-                generated_by_ai=True,
+            "provider": generation.provider,
+            "model": generation.model,
+            "generation_ticket": generation_ticket.issue(
+                generation.provider,
+                generation.model,
+                generated_sql,
             ),
-
-            # Separate from provenance on purpose. The block above
-            # describes how the rows were produced; this one states
-            # that nothing checked whether they answer the question.
-            # A client that reads only one of the two is misled by
-            # neither, which is the whole point of the split. It takes
-            # no arguments and cannot fail, so it is as safe to build
-            # as it is to read.
-            "verification": correctness.build_verification(),
         }
 
     except HTTPException:
@@ -1483,6 +1498,158 @@ def ask_ai(payload: QueryRequest, request: Request):
         # hand-written validation failure still says something useful;
         # everything else becomes the generic detail plus the reference
         # id, and the real traceback goes to the server log.
+        raise observability.sanitized_http_exception(
+            exc, request
+        ) from None
+
+
+# ============================================================
+# RUN ENDPOINT (EXECUTE REVIEWED SQL - NO PROVIDER, NO ATTEMPT)
+# ============================================================
+# The second half of the split. /ask writes SQL and never touches a
+# database; this route runs SQL the user has seen and possibly edited,
+# and never calls a provider. It is deliberately the cheaper door:
+#
+#   Access -> Rate limiting -> Re-validation -> Read-only execution
+#
+# Access is require_run_access (app/access.py): the same four
+# credentials as /ask, except that a visitor qualifies by having spent
+# at least one attempt already (they generated the SQL they are now
+# running). No attempt is charged here because no provider is called -
+# running SQL that already exists costs no quota.
+#
+# The rate limiter is a separate "run" scope with its own operator-set
+# ceiling (RUN_RATE_LIMIT_*), defaulting to the /ask limits. Keeping a
+# distinct bucket means execution cannot be folded into the generation
+# allowance, and an operator can tighten execution independently.
+#
+# Re-validation matters most here: the statement arrives from the
+# browser and may have been edited, so it is treated as untrusted. It
+# is validated again (SELECT-only) and then execute_sql_with_metadata
+# runs its own read-only plan check before the database is touched.
+# The frontend is never trusted to have kept the SQL safe.
+
+@visitor_router.post(
+    "/run",
+    dependencies=[
+        Depends(
+            rate_limit_visitor(
+                scope="run",
+                limit=RUN_RATE_LIMIT_REQUESTS,
+                window_seconds=RUN_RATE_LIMIT_WINDOW_SECONDS,
+                access_dependency=access.require_run_access,
+            )
+        )
+    ],
+)
+def run_sql(payload: RunRequest, request: Request):
+
+    sql = payload.sql.strip()
+
+    if not sql:
+
+        raise HTTPException(
+            status_code=400,
+            detail="SQL cannot be empty.",
+        )
+
+    prompt = payload.prompt
+
+    if len(prompt) > MAX_PROMPT_CHARS:
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Prompt is too long "
+                f"(max {MAX_PROMPT_CHARS} characters)."
+            )
+        )
+
+    try:
+
+        # Same resolution as generation, under the same caller
+        # namespace, so a run reaches the source the SQL was written
+        # for and no other. Resolved before execution; an unknown or
+        # escaping id is answered before the database is touched.
+        database_path = None
+
+        if payload.import_id:
+
+            database_path = _resolve_ask_import(
+                request, payload.import_id
+            )
+
+        # How this statement came to exist, decided by the server from
+        # the signed ticket - never from a client-chosen field. A valid
+        # ticket whose digest matches the SQL means a model wrote it
+        # verbatim ("generated"); a valid ticket whose digest differs
+        # means the user edited the model's SQL ("edited"); no valid
+        # ticket means the statement is the user's own ("manual").
+        # classify() absorbs its own failures and returns "manual", so a
+        # malformed ticket can never do worse than under-claim.
+        origin, provider, model = generation_ticket.classify(
+            payload.generation_ticket, sql
+        )
+
+        # The one and only execution point for reviewed SQL. It
+        # validates and runs the read-only plan check itself, so even
+        # if the statement differs from what was generated it cannot
+        # write, cannot chain a second statement and cannot touch
+        # another database.
+        data, execution = execute_sql_with_metadata(
+            sql,
+            path=database_path,
+        )
+
+        return {
+            "success": True,
+            "prompt": prompt,
+            "sql": sql,
+            "explanation": payload.explanation,
+            "data": data,
+            "count": len(data),
+            "truncated": execution.truncated,
+
+            # Additive and derived from the ACTUAL rows, as before.
+            "chart": analytics.plan_chart(data, sql),
+
+            # provider and model come only from the verified ticket, so
+            # a client cannot name a model that never wrote the SQL.
+            # For "manual" both are null and generated_by_ai is false;
+            # for "generated" and "edited" the ticket's model is named
+            # and sql_origin records whether the statement was altered.
+            "provenance": provenance.build_provenance(
+                database_path=execution.database_path,
+                request_id=observability.request_id_of(request),
+                provider=provider,
+                model=model,
+                executed_at=execution.executed_at,
+                elapsed=execution.elapsed_ms,
+                rows_returned=execution.rows_returned,
+                truncated=execution.truncated,
+                total_matched=execution.total_matched,
+                generated_by_ai=(
+                    origin != generation_ticket.MANUAL
+                ),
+                sql_origin=origin,
+            ),
+
+            "verification": correctness.build_verification(),
+        }
+
+    except HTTPException:
+
+        raise
+
+    except uploads.ImportNotFound:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Import not found.",
+        ) from None
+
+    except Exception as exc:
+
         raise observability.sanitized_http_exception(
             exc, request
         ) from None

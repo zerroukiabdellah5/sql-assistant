@@ -256,6 +256,22 @@ ASK_RATE_LIMIT_WINDOW_SECONDS = _positive_int_env(
     60,
 )
 
+# /api/run executes reviewed SQL and is deliberately the cheaper door:
+# no provider call and no attempt spent. It has its OWN bucket so a
+# caller cannot fold generation and execution into one allowance, and it
+# defaults to the same ceiling as generation. An operator can tighten it
+# - or widen it - without touching the generation limit, because a run
+# reaches only a read-only database while a generation reaches the
+# provider.
+RUN_RATE_LIMIT_REQUESTS = _positive_int_env(
+    "RUN_RATE_LIMIT_REQUESTS",
+    ASK_RATE_LIMIT_REQUESTS,
+)
+RUN_RATE_LIMIT_WINDOW_SECONDS = _positive_int_env(
+    "RUN_RATE_LIMIT_WINDOW_SECONDS",
+    ASK_RATE_LIMIT_WINDOW_SECONDS,
+)
+
 # The login routes are the only brute-force surface for the shared
 # APP_API_KEY, so the window is deliberately long.
 LOGIN_RATE_LIMIT_REQUESTS = _positive_int_env(

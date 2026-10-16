@@ -1215,9 +1215,6 @@ def test_the_api_response_is_byte_identical_with_and_without_usage(
 
     assert with_usage.status_code == without_usage.status_code == 200
 
-    assert with_usage.json()["sql"] == without_usage.json()["sql"]
-    assert (
-        with_usage.json()["explanation"]
-        == without_usage.json()["explanation"]
-    )
-    assert with_usage.json()["data"] == without_usage.json()["data"]
+    # /api/ask only generates, so the whole body is deterministic. Usage
+    # metadata changes nothing a client sees.
+    assert with_usage.json() == without_usage.json()

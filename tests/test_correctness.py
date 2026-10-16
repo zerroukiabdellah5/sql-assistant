@@ -28,7 +28,7 @@ import pytest
 
 from app import config, correctness, main, provenance, reports
 
-from tests.test_provenance import STORE_SQL, stub_ask
+from tests.test_provenance import STORE_SQL, ask_then_run, stub_ask
 
 # The exact verification contract. Pinned rather than merely checked
 # for presence: adding a field to this block is how a claim would
@@ -92,11 +92,9 @@ def provider_stub(monkeypatch):
 
 @pytest.fixture
 def asked(authed_client, provider_stub):
-    """A successful /api/ask against the real store.db."""
+    """A successful generate-then-run against the real store.db."""
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    response = ask_then_run(authed_client)
 
     assert response.status_code == 200, response.text
 
@@ -167,11 +165,11 @@ def test_the_status_is_a_word_and_not_a_boolean(asked):
 def test_two_identical_requests_report_the_same_verification(
     authed_client, provider_stub
 ):
-    first = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
+    first = ask_then_run(
+        authed_client
     ).json()["verification"]
-    second = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
+    second = ask_then_run(
+        authed_client
     ).json()["verification"]
 
     assert first == second
@@ -373,9 +371,7 @@ def test_no_verification_when_sql_execution_fails(
 
     monkeypatch.setattr(main, "execute_sql_with_metadata", explode)
 
-    response = authed_client.post(
-        "/api/ask", json={"prompt": "show the products"}
-    )
+    response = ask_then_run(authed_client)
 
     assert response.status_code >= 400
     assert "verification" not in response.json()
