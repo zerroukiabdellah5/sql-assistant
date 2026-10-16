@@ -60,6 +60,7 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.storage import StorageError
 from app.validate import ValidationError
 
 # ------------------------------------------------------------
@@ -83,6 +84,15 @@ _ERROR_LOGGER_NAME = "app.error"
 # filesystem path, no provider, database or OS error.
 _INTERNAL_DETAIL = "Request failed. Reference ID: {request_id}"
 _VALIDATION_DETAIL = "Invalid request data."
+
+# A storage backend that is missing, misconfigured or unreachable is a
+# server condition, not a bad request. It is answered with 503 - the
+# service cannot currently do the work - and the same reference-id
+# treatment as an unexpected failure, so a client never learns whether
+# an endpoint is missing, unconfigured or merely broken.
+_STORAGE_UNAVAILABLE_DETAIL = (
+    "Upload storage is unavailable. Reference ID: {request_id}"
+)
 
 # Used when a caller has no request context at all (startup, a code
 # path reached outside the request lifecycle). It is a fixed constant,
@@ -226,6 +236,21 @@ def validation_error_payload(request_id):
     }
 
 
+def storage_unavailable_payload(request_id):
+    """The sanitized 503 body for a missing or unusable backend.
+
+    Fixed text plus the reference id, exactly like the 500: the client
+    learns the service cannot store the request right now, and nothing
+    about which provider is configured, where it lives or why it failed.
+    """
+
+    return {
+        "detail": _STORAGE_UNAVAILABLE_DETAIL.format(
+            request_id=request_id
+        )
+    }
+
+
 def is_user_facing_error(exception):
     """True only for a hand-written, deliberate validation failure.
 
@@ -271,10 +296,11 @@ def sanitized_http_exception(
 
     A ValidationError keeps its hand-written message, because hiding
     "Only SELECT queries are allowed." would make the application
-    unusable while telling the user nothing. Anything else is logged
-    with its traceback and answered with the generic detail plus the
-    reference id, so an SDK, provider, database or OS message can never
-    reach a client.
+    unusable while telling the user nothing. A storage failure becomes
+    a 503 with a fixed message. Anything else is logged with its
+    traceback and answered with the generic detail plus the reference
+    id, so an SDK, provider, database or OS message can never reach a
+    client.
 
     Raises nothing: the caller does the raising, which keeps the
     sanitisation impossible to forget at the raise site.
@@ -287,6 +313,20 @@ def sanitized_http_exception(
         )
 
     request_id = request_id_of(request)
+
+    if isinstance(exception, StorageError):
+
+        # A missing or misconfigured backend is reported, not hidden as
+        # a 500 that would look like a crash. The message is fixed: it
+        # names no provider, path or credential.
+        log_unexpected_exception(exception, request_id)
+
+        return HTTPException(
+            status_code=503,
+            detail=_STORAGE_UNAVAILABLE_DETAIL.format(
+                request_id=request_id
+            ),
+        )
 
     log_unexpected_exception(exception, request_id)
 

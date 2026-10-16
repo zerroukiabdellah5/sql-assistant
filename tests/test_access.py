@@ -1,6 +1,6 @@
 """Tests for the visitor access model.
 
-Five free attempts for anyone, an App Access Code for access beyond
+Six free attempts for anyone, an App Access Code for access beyond
 that, and the owner's own credentials working exactly as they did
 before. These tests pin the promises the frontend makes of this part of
 the API:
@@ -116,7 +116,11 @@ def test_the_whole_allowance_is_available_to_a_new_visitor(
         assert access_used(response) == attempt
 
 
-def test_the_sixth_attempt_is_refused(anon_client, stub_provider):
+def test_the_seventh_attempt_is_refused(anon_client, stub_provider):
+    """Attempts 1-6 are answered, the 7th gets FREE_TRIAL_EXHAUSTED."""
+
+    assert config.TRIAL_MAX_ATTEMPTS == 6
+
     spend_allowance(anon_client)
 
     response = anon_client.post(
@@ -165,6 +169,14 @@ def test_the_refusal_leaks_nothing(
 def test_the_refusal_names_the_owner_only_when_one_is_configured(
     anon_client, stub_provider, monkeypatch
 ):
+    """The address is operator configuration, not a constant.
+
+    Cleared first so the assertion does not depend on the machine's
+    environment, then set to show the payload picks it up.
+    """
+
+    monkeypatch.setattr(config, "OWNER_CONTACT_EMAIL", "")
+
     spend_allowance(anon_client)
 
     body = anon_client.post(

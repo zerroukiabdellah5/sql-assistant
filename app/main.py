@@ -26,7 +26,15 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from app import access, approvals, history, observability, uploads
+from app import (
+    access,
+    approvals,
+    history,
+    observability,
+    storage,
+    uploads,
+    visitor,
+)
 from app.access import FreeTrialExhausted
 from app.auth import (
     configured_secret,
@@ -80,6 +88,7 @@ from app.ratelimit import (
     REPORT_RATE_LIMIT_REQUESTS,
     REPORT_RATE_LIMIT_WINDOW_SECONDS,
     rate_limit,
+    rate_limit_by_visitor,
     rate_limit_visitor,
 )
 from app.reports import build_report_pdf
@@ -116,6 +125,31 @@ async def lifespan(app):
         logger.warning(
             "startup skipped: upload directory unavailable",
             exc_info=True,
+        )
+
+    # Make the storage situation loud at startup. An unavailable backend
+    # (a provider selected but not implemented or not configured) and a
+    # NON-DURABLE backend on a platform whose filesystem does not survive
+    # an instance are both conditions an operator must not discover from
+    # a user. This is a warning, never a silent fall back: the app
+    # neither pretends the storage is durable nor crashes on boot.
+    storage_state = storage.status()
+
+    if not storage_state["available"]:
+
+        logger.warning(
+            "storage unavailable: backend=%s require_persistent=%s",
+            storage_state["backend"],
+            storage_state["require_persistent"],
+        )
+
+    elif not storage_state["persistent"] and os.getenv("VERCEL"):
+
+        logger.warning(
+            "uploads are NOT durable here: backend=%s keeps data on a "
+            "per-instance filesystem. Configure a shared storage backend "
+            "before relying on uploads in production.",
+            storage_state["backend"],
         )
 
     yield
@@ -198,6 +232,29 @@ async def invalid_access_code_handler(
     return JSONResponse(
         status_code=401,
         content=access.invalid_code_payload(
+            observability.request_id_of(request)
+        ),
+    )
+
+
+# A storage backend that is missing, misconfigured or unreachable is a
+# server condition, answered 503 with a fixed body plus the reference
+# id. This handler is what makes EVERY storage path fail closed with the
+# same status - a route that does not wrap its own call in
+# sanitized_http_exception still cannot leak a provider, path or OS
+# error, and an operator who selected a backend that is not configured
+# gets a clear signal instead of a mislabelled 500.
+@app.exception_handler(storage.StorageError)
+async def storage_unavailable_handler(
+    request: Request, exc: storage.StorageError
+):
+    observability.log_unexpected_exception(
+        exc, observability.request_id_of(request)
+    )
+
+    return JSONResponse(
+        status_code=503,
+        content=observability.storage_unavailable_payload(
             observability.request_id_of(request)
         ),
     )
@@ -524,6 +581,392 @@ def request_access(
 
 
 # ============================================================
+# VISITOR UPLOADS (PUBLIC BY DESIGN, PER-BROWSER)
+# ============================================================
+# Uploading is the whole point of the product for a visitor who holds no
+# credential, so these routes live on the unguarded visitor router, next
+# to /api/ask. What keeps them safe is not a credential but a namespace:
+# every file is stored under the caller's own signed visitor id, and
+# every read resolves inside that one namespace only. One visitor's
+# imports are therefore unreadable - and undeletable - by another.
+#
+# The guarded owner routes (/api/upload, /api/imports) are left exactly
+# as they were: they still answer only to APP_API_KEY or an owner
+# session, and they keep operating on the shared namespace for scripts
+# and probes. Nothing here relaxes them or the guard on the router they
+# live on.
+#
+# The upload limiter is the same ceiling the owner route uses, but keyed
+# by the visitor cookie instead of an authenticated identity. Validation,
+# sandboxing and the read-only SQL rules are all unchanged: these routes
+# call the same app/uploads.py code, just with a different root.
+
+_visitor_upload_limiter = rate_limit_by_visitor(
+    scope="visitor-upload",
+    limit=UPLOAD_RATE_LIMIT_REQUESTS,
+    window_seconds=UPLOAD_RATE_LIMIT_WINDOW_SECONDS,
+)
+
+_visitor_delete_limiter = rate_limit_by_visitor(
+    scope="visitor-delete",
+    limit=DELETE_RATE_LIMIT_REQUESTS,
+    window_seconds=DELETE_RATE_LIMIT_WINDOW_SECONDS,
+)
+
+# The anonymous demo sessions/approvals are cheap, but they still write
+# to the metadata store, so they carry the same kind of per-browser
+# ceiling the owner equivalents do - keyed by the signed visitor cookie.
+_visitor_session_limiter = rate_limit_by_visitor(
+    scope="visitor-session",
+    limit=DELETE_RATE_LIMIT_REQUESTS,
+    window_seconds=DELETE_RATE_LIMIT_WINDOW_SECONDS,
+)
+
+_visitor_approval_limiter = rate_limit_by_visitor(
+    scope="visitor-approval",
+    limit=APPROVAL_RATE_LIMIT_REQUESTS,
+    window_seconds=APPROVAL_RATE_LIMIT_WINDOW_SECONDS,
+)
+
+# The server-side report is the same cost as the owner one (reportlab
+# plus a schema read), so it gets the same ceiling, per visitor.
+_visitor_report_limiter = rate_limit_by_visitor(
+    scope="visitor-report",
+    limit=REPORT_RATE_LIMIT_REQUESTS,
+    window_seconds=REPORT_RATE_LIMIT_WINDOW_SECONDS,
+)
+
+
+def _visitor_import_view(imported):
+    """Strip the server-relative path from an import before returning it.
+
+    The owner routes return it for their own callers; a visitor has no
+    use for it, and the /tmp layout it can name is not something the
+    anonymous surface needs to disclose.
+    """
+
+    view = dict(imported)
+    view.pop("path", None)
+    return view
+
+
+@visitor_router.post(
+    "/visitor/imports",
+    dependencies=[Depends(_visitor_upload_limiter)],
+)
+async def visitor_upload_file(
+    request: Request,
+    file: UploadFile = File(...),
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    if not file.filename:
+
+        raise HTTPException(
+            status_code=400,
+            detail="No file provided."
+        )
+
+    content = await file.read()
+
+    try:
+
+        imported = uploads.import_file_for_visitor(
+            visitor_id, file.filename, content
+        )
+
+    except Exception as exc:
+
+        # The unsupported-extension and sandbox rules keep their own
+        # hand-written wording (400); a sqlite3, openpyxl or OS failure
+        # is replaced by the generic detail and logged server-side.
+        raise observability.sanitized_http_exception(
+            exc, request
+        ) from None
+
+    return _visitor_import_view(imported)
+
+
+@visitor_router.get("/visitor/imports")
+def visitor_list_imports(
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    return {
+        "imports": [
+            _visitor_import_view(item)
+            for item in uploads.list_visitor_imports(visitor_id)
+        ]
+    }
+
+
+@visitor_router.delete(
+    "/visitor/imports/{import_id}",
+    dependencies=[Depends(_visitor_delete_limiter)],
+)
+def visitor_delete_import(
+    import_id: str,
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    if not uploads.delete_visitor_import(visitor_id, import_id):
+
+        raise HTTPException(
+            status_code=404,
+            detail="Import not found."
+        )
+
+    return {"deleted": import_id}
+
+
+@visitor_router.get("/visitor/schema")
+def visitor_schema(
+    request: Request,
+    import_id: Optional[str] = None,
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    if not import_id:
+
+        raise HTTPException(
+            status_code=400,
+            detail="import_id is required."
+        )
+
+    try:
+
+        database_path = uploads.resolve_visitor_import_path(
+            visitor_id, import_id
+        )
+
+    except uploads.ImportNotFound:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Import not found.",
+        ) from None
+
+    except Exception as exc:
+
+        # A malformed or escaping id is a hand-written ValidationError
+        # (400); anything else is sanitised.
+        raise observability.sanitized_http_exception(
+            exc, request
+        ) from None
+
+    try:
+
+        return {
+            "schema": get_schema(database_path)
+        }
+
+    except Exception as exc:
+
+        raise observability.sanitized_http_exception(
+            exc, request
+        ) from None
+
+
+# ============================================================
+# VISITOR REPORTS (PUBLIC BY DESIGN, PER-BROWSER)
+# ============================================================
+# The server-side PDF report is a real feature, not an owner secret, so
+# a visitor gets it too, on the unguarded router. What makes it safe is
+# the same rule as everywhere else on this router: the caller supplies
+# every byte of content in the request, and the only server state read
+# is a schema - the public default database's, or the caller's OWN
+# imported database, resolved inside their visitor namespace. No owner
+# import is reachable and no owner data is read. The document is built
+# by the identical build_report_pdf used by the guarded route.
+
+@visitor_router.post(
+    "/visitor/report",
+    dependencies=[Depends(_visitor_report_limiter)],
+)
+def visitor_generate_report(
+    payload: ReportRequest, request: Request
+):
+
+    database_path = None
+
+    if payload.import_id:
+
+        try:
+
+            database_path = _resolve_ask_import(
+                request, payload.import_id
+            )
+
+        except uploads.ImportNotFound:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Import not found.",
+            ) from None
+
+        except Exception as exc:
+
+            raise observability.sanitized_http_exception(
+                exc, request
+            ) from None
+
+    return _build_report_response(payload, request, database_path)
+
+
+# ============================================================
+# VISITOR SESSIONS (PUBLIC BY DESIGN, PER-BROWSER)
+# ============================================================
+# The Sessions feature, for a browser with no credential. Every route
+# resolves inside the caller's own signed visitor id, exactly like the
+# visitor uploads: one browser can never list, load or delete another's
+# sessions, and the owner session tables (/api/sessions) are never
+# touched. /api/ask is made namespace-aware below so a selected visitor
+# session persists and reloads its own context.
+
+@visitor_router.get("/visitor/sessions")
+def visitor_list_sessions(
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    return {
+        "sessions": history.list_visitor_sessions(visitor_id)
+    }
+
+
+@visitor_router.post(
+    "/visitor/sessions",
+    dependencies=[Depends(_visitor_session_limiter)],
+)
+def visitor_create_session(
+    request: SessionCreate,
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    return history.create_visitor_session(
+        visitor_id, request.title.strip() or "New session"
+    )
+
+
+@visitor_router.get("/visitor/sessions/{session_id}")
+def visitor_session_detail(
+    session_id: str,
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    session = history.get_visitor_session(visitor_id, session_id)
+
+    if session is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found.",
+        )
+
+    return {
+        "session": session,
+        "messages": history.get_visitor_messages(
+            visitor_id, session_id
+        ),
+    }
+
+
+@visitor_router.delete(
+    "/visitor/sessions/{session_id}",
+    dependencies=[Depends(_visitor_session_limiter)],
+)
+def visitor_delete_session(
+    session_id: str,
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    if not history.delete_visitor_session(visitor_id, session_id):
+
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found.",
+        )
+
+    return {"deleted": session_id}
+
+
+# ============================================================
+# VISITOR APPROVALS (PUBLIC BY DESIGN, PER-BROWSER)
+# ============================================================
+# The owner approval ledger stays behind the guard. A visitor instead
+# sees a small, fixed set of EXAMPLE operations, seeded into their own
+# namespace, and can approve or reject them; the decision is stored per
+# visitor. No owner row is ever read or written, and no visitor can see
+# another's decisions.
+
+@visitor_router.get("/visitor/approvals")
+def visitor_list_approvals(
+    status: Optional[str] = None,
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    if status and status not in (
+        approvals.PENDING,
+        approvals.APPROVED,
+        approvals.REJECTED,
+    ):
+
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid approval status.",
+        )
+
+    return {
+        "approvals": approvals.list_visitor_approvals(
+            visitor_id, status=status
+        )
+    }
+
+
+def _decide_visitor_approval(visitor_id, approval_id, action):
+
+    decision = approvals.decide_visitor_approval(
+        visitor_id, approval_id, action
+    )
+
+    if decision is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Approval not found.",
+        )
+
+    return decision
+
+
+@visitor_router.post(
+    "/visitor/approvals/{approval_id}/approve",
+    dependencies=[Depends(_visitor_approval_limiter)],
+)
+def visitor_approve_approval(
+    approval_id: str,
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    return _decide_visitor_approval(
+        visitor_id, approval_id, approvals.APPROVED
+    )
+
+
+@visitor_router.post(
+    "/visitor/approvals/{approval_id}/reject",
+    dependencies=[Depends(_visitor_approval_limiter)],
+)
+def visitor_reject_approval(
+    approval_id: str,
+    visitor_id: str = Depends(visitor.require_visitor),
+):
+
+    return _decide_visitor_approval(
+        visitor_id, approval_id, approvals.REJECTED
+    )
+
+
+# ============================================================
 # HOME (PUBLIC)
 # ============================================================
 
@@ -671,7 +1114,8 @@ def version():
         "gemini_configured": bool(GEMINI_API_KEY),
         "nvidia_configured": bool(
             NVIDIA_API_KEY and NVIDIA_MODEL
-        )
+        ),
+        "storage": storage.status(),
     }
 
 
@@ -728,6 +1172,72 @@ _CONCURRENCY_DETAIL = (
     "Please wait a moment and try again."
 )
 
+
+def _resolve_ask_import(request, import_id):
+    """Resolve a selected import under the caller's own namespace.
+
+    An owner (a session cookie or APP_API_KEY) may name a shared import
+    or one of their own visitor-namespace imports. A visitor (a trial
+    allowance or an App Access Code) may only name an import under their
+    own visitor namespace: another visitor's file is never resolvable,
+    and there is no fallback to the default database. A malformed id
+    raises ValidationError (400) and an unknown one ImportNotFound (404),
+    exactly as before.
+    """
+
+    access_type = access.read_access_type(request)
+    visitor_id = visitor.visitor_id_from_request(request)
+
+    if access_type in ("session", "api-key"):
+
+        try:
+            return uploads.resolve_import_path(import_id)
+
+        except uploads.ImportNotFound:
+
+            if not visitor_id:
+                raise
+
+            return uploads.resolve_visitor_import_path(
+                visitor_id, import_id
+            )
+
+    if not visitor_id:
+        raise uploads.ImportNotFound("Import not found.")
+
+    return uploads.resolve_visitor_import_path(visitor_id, import_id)
+
+
+def _ask_session_namespace(request, session_id):
+    """Resolve a session_id the caller is allowed to use.
+
+    Returns ``("shared", None)`` for an owner's shared session,
+    ``("visitor", visitor_id)`` for a session under the caller's own
+    signed visitor namespace, or ``(None, None)`` when the caller may
+    not reach it. An owner resolves the shared store first; a visitor
+    (trial allowance or App Access Code) reaches only their own. The two
+    stores never mix, so a visitor session id can never load owner
+    history and an owner session id can never be read anonymously.
+    """
+
+    if access.read_access_type(request) in ("session", "api-key"):
+
+        if history.session_exists(session_id):
+            return "shared", None
+
+        return None, None
+
+    visitor_id = visitor.visitor_id_from_request(request)
+
+    if visitor_id and history.visitor_session_exists(
+        visitor_id, session_id
+    ):
+
+        return "visitor", visitor_id
+
+    return None, None
+
+
 @visitor_router.post(
     "/ask",
     dependencies=[
@@ -763,12 +1273,21 @@ def ask_ai(payload: QueryRequest, request: Request):
 
     session_id = payload.session_id
 
-    if session_id and not history.session_exists(session_id):
+    session_scope = None
+    session_visitor = None
 
-        raise HTTPException(
-            status_code=404,
-            detail="Session not found."
+    if session_id:
+
+        session_scope, session_visitor = _ask_session_namespace(
+            request, session_id
         )
+
+        if session_scope is None:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Session not found."
+            )
 
     try:
 
@@ -776,17 +1295,28 @@ def ask_ai(payload: QueryRequest, request: Request):
         # unknown, malformed or escaping import_id is answered as an
         # error and must not consume a free attempt or reach a provider.
         # None means "not selected", which keeps the default database.
+        # The namespace it is resolved in depends on who is asking: see
+        # _resolve_ask_import.
         database_path = None
 
         if payload.import_id:
 
-            database_path = uploads.resolve_import_path(
-                payload.import_id
+            database_path = _resolve_ask_import(
+                request, payload.import_id
             )
 
         if session_id:
 
-            stored_turns = history.build_history_turns(session_id)
+            if session_scope == "visitor":
+
+                stored_turns = history.build_visitor_history_turns(
+                    session_visitor, session_id
+                )
+
+            else:
+
+                stored_turns = history.build_history_turns(session_id)
+
             turns = [
                 HistoryTurn(prompt=turn["prompt"], sql=turn["sql"])
                 for turn in stored_turns
@@ -841,17 +1371,33 @@ def ask_ai(payload: QueryRequest, request: Request):
 
         if session_id:
 
-            history.add_message(
-                session_id, "user",
-                prompt=prompt,
-            )
-            history.add_message(
-                session_id, "assistant",
-                sql=generated_sql,
-                explanation=explanation,
-                count=len(data),
-                truncated=execution.truncated,
-            )
+            if session_scope == "visitor":
+
+                history.add_visitor_message(
+                    session_visitor, session_id, "user",
+                    prompt=prompt,
+                )
+                history.add_visitor_message(
+                    session_visitor, session_id, "assistant",
+                    sql=generated_sql,
+                    explanation=explanation,
+                    count=len(data),
+                    truncated=execution.truncated,
+                )
+
+            else:
+
+                history.add_message(
+                    session_id, "user",
+                    prompt=prompt,
+                )
+                history.add_message(
+                    session_id, "assistant",
+                    sql=generated_sql,
+                    explanation=explanation,
+                    count=len(data),
+                    truncated=execution.truncated,
+                )
 
         return {
             "success": True,
@@ -1193,51 +1739,14 @@ def delete_import_route(import_id: str):
 # REPORTS (PROTECTED)
 # ============================================================
 
-@api.post(
-    "/report",
-    dependencies=[
-        Depends(
-            rate_limit(
-                scope="report",
-                limit=REPORT_RATE_LIMIT_REQUESTS,
-                window_seconds=REPORT_RATE_LIMIT_WINDOW_SECONDS,
-            )
-        )
-    ],
-)
-def generate_report(
-    payload: ReportRequest, request: Request
-):
+def _build_report_response(payload, request, database_path):
 
     # The report's schema section describes the same source the rows came
-    # from, so a selected import is resolved the same way /api/ask
-    # resolves it. An unknown id fails rather than describing the
-    # default database.
-    database_path = None
-
-    if payload.import_id:
-
-        try:
-
-            database_path = uploads.resolve_import_path(
-                payload.import_id
-            )
-
-        except uploads.ImportNotFound:
-
-            raise HTTPException(
-                status_code=404,
-                detail="Import not found.",
-            ) from None
-
-        except Exception as exc:
-
-            # A malformed or escaping id is a hand-written
-            # ValidationError (400); anything else is sanitised.
-            raise observability.sanitized_http_exception(
-                exc, request
-            ) from None
-
+    # from. ``database_path`` is None for the default database, or the
+    # already-resolved path of a selected import. The two report routes
+    # below differ only in how they resolve that path - shared namespace
+    # for the owner, the caller's own namespace for a visitor - so the
+    # document itself is built in exactly one place.
     try:
 
         path = build_report_pdf(
@@ -1272,6 +1781,50 @@ def generate_report(
         media_type="application/pdf",
         filename=os.path.basename(path),
     )
+
+
+@api.post(
+    "/report",
+    dependencies=[
+        Depends(
+            rate_limit(
+                scope="report",
+                limit=REPORT_RATE_LIMIT_REQUESTS,
+                window_seconds=REPORT_RATE_LIMIT_WINDOW_SECONDS,
+            )
+        )
+    ],
+)
+def generate_report(
+    payload: ReportRequest, request: Request
+):
+
+    database_path = None
+
+    if payload.import_id:
+
+        try:
+
+            database_path = uploads.resolve_import_path(
+                payload.import_id
+            )
+
+        except uploads.ImportNotFound:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Import not found.",
+            ) from None
+
+        except Exception as exc:
+
+            # A malformed or escaping id is a hand-written
+            # ValidationError (400); anything else is sanitised.
+            raise observability.sanitized_http_exception(
+                exc, request
+            ) from None
+
+    return _build_report_response(payload, request, database_path)
 
 
 # Both routers are mounted only after every handler is registered, so

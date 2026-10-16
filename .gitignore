@@ -19,3 +19,8 @@ uploads/
 
 .vercel
 .env*
+
+# The template is the one .env file that IS tracked: it carries
+# placeholders only and documents the safe setup. Real .env files
+# stay ignored above.
+!.env.example

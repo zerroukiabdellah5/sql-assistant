@@ -5,17 +5,41 @@
 # processed in a sandbox directory. Imported SQL never runs
 # against store.db and uploaded SQL scripts only execute against
 # a brand-new throwaway database.
+#
+# PERSISTENCE
+# Every import is written through app.storage rather than straight to
+# the filesystem. That indirection is what lets a durable backend be
+# configured for production, where the local filesystem is read-only
+# and /tmp does not survive an instance. This module owns the import
+# SEMANTICS (validation, conversion, schema inspection, the namespace
+# rules); app.storage owns WHERE the bytes and their records live.
+#
+# An import is now two things that must both be present to resolve:
+#
+#   * an object, stored under a key derived from the caller's namespace
+#     and the generated id (for example "databases/<id>_<name>" or
+#     "visitors/<id>/sandboxes/<id>_sandbox.db");
+#   * a metadata record naming its owner (scope), kind, tables and the
+#     object key.
+#
+# The record is authoritative. Lookups go through it, so a file whose
+# name matches is NOT enough to resolve an import: it must have been
+# recorded by an import in the same scope. Namespace isolation is thus
+# enforced by the scope filter, not only by directory layout, which
+# survives a backend that has no directories at all.
 # ============================================================
 
 import csv
 import io
 import os
 import re
-import shutil
 import sqlite3
+import tempfile
+import time
 import uuid
 
 import app.config as config
+from app import storage
 from app.schema import (
     inspect_database,
     schema_to_text,
@@ -39,8 +63,19 @@ _SAFE_ID_RE = re.compile(r"[^A-Za-z0-9_.-]")
 # A stored import id is uuid4().hex[:12]: lowercase hex. The pattern is
 # deliberately narrow so a value that could ever be a path fragment
 # (a slash, a dot, a backslash, a drive colon) is rejected before any
-# filesystem call is made.
+# storage call is made.
 _IMPORT_ID_RE = re.compile(r"^[A-Za-z0-9]{1,64}$")
+
+# An anonymous visitor id is new_visitor_id(): 32 hex characters. The
+# same reasoning as the import-id rule applies one level up: the id
+# names a namespace, so anything that could escape it is refused before
+# the key is built.
+_VISITOR_ID_RE = re.compile(r"^[A-Za-z0-9]{16,64}$")
+
+# The whole scope a visitor's imports live in. It must be exactly the
+# visitor subtree, so a caller cannot aim an import at the shared
+# namespace or somewhere above the root by way of the root argument.
+_VISITOR_SCOPE_RE = re.compile(r"^visitors/[A-Za-z0-9]{16,64}$")
 
 _STATEMENT_START_RE = re.compile(
     r"^(CREATE\s+(TABLE|UNIQUE\s+INDEX|INDEX|VIEW)|INSERT\s+INTO)\b",
@@ -52,10 +87,108 @@ def _upload_root():
     return os.path.abspath(config.UPLOAD_DIR)
 
 
-def _subdir(name):
-    directory = os.path.join(_upload_root(), name)
-    os.makedirs(directory, exist_ok=True)
-    return directory
+# Every visitor's files live under their own subdirectory, so the import
+# table of one browser can never be reached by another. The id is
+# validated before it is joined to any path.
+def _visitor_root(visitor_id):
+    if not visitor_id or not _VISITOR_ID_RE.match(visitor_id):
+        raise ValidationError("Invalid visitor id.")
+    return os.path.join(_upload_root(), "visitors", visitor_id)
+
+
+# ============================================================
+# STORAGE BINDING
+# ============================================================
+# The stores are fetched per call (app.storage.get_stores), never
+# cached, so a misconfigured backend fails closed on first use and a
+# test that swaps the stores is not masked by a stale reference.
+
+def _stores():
+    return storage.get_stores()
+
+
+def _object_store():
+    return _stores().object_store
+
+
+def _metadata_store():
+    return _stores().metadata_store
+
+
+def _key(prefix, sub, name):
+    """Build an object key from a namespace prefix and a subdirectory."""
+
+    parts = [part for part in (prefix, sub, name) if part]
+    return "/".join(parts)
+
+
+def _scope_for(root):
+    """Turn a caller's root into a (scope, prefix, base) triple.
+
+    ``scope`` is the durable owner label ("shared" or a visitor's
+    subtree), ``prefix`` is the matching object-key prefix ("" for the
+    shared namespace) and ``base`` is the absolute local root. Only the
+    shared namespace and a single visitor's subtree are accepted, so an
+    unexpected root cannot smuggle an import into another namespace.
+    """
+
+    base = os.path.abspath(root or _upload_root())
+    root_abs = _upload_root()
+
+    try:
+        relative = os.path.relpath(base, root_abs)
+    except ValueError:
+        raise ValidationError("Invalid import namespace.")
+
+    relative = relative.replace(os.sep, "/")
+
+    if relative in (".", ""):
+        return "shared", "", base
+
+    if relative == ".." or relative.startswith("../"):
+        raise ValidationError("Invalid import namespace.")
+
+    if not _VISITOR_SCOPE_RE.match(relative):
+        raise ValidationError("Invalid import namespace.")
+
+    return relative, relative, base
+
+
+def _save_import(
+    import_id,
+    scope,
+    prefix,
+    kind,
+    filename,
+    stored_name,
+    sub,
+    size,
+    inspected,
+    extra,
+):
+    """Write the object's metadata record; the object is already stored."""
+
+    record = {
+        "id": import_id,
+        "scope": scope,
+        "kind": kind,
+        "filename": filename,
+        "stored_name": stored_name,
+        "object_key": _key(prefix, sub, stored_name),
+        "path": f"{sub}/{stored_name}",
+        "size": size,
+        "created_at": time.time(),
+        "tables": inspected.get("tables", []),
+        "table_count": inspected.get("table_count", 0),
+        "column_count": inspected.get("column_count", 0),
+        "schema_text": inspected.get("schema_text", ""),
+    }
+
+    record.update(extra)
+
+    _metadata_store().save(scope, record)
+
+    return record
 
 
 def _new_id():
@@ -89,30 +222,51 @@ def inspect_upload(path):
     }
 
 
+def _read_object_bytes(path):
+    with open(path, "rb") as handle:
+        return handle.read()
+
+
 # ============================================================
 # SQLITE DATABASE FILES
 # ============================================================
 
-def import_database(filename, content):
-    """Copy an uploaded .db into the sandbox and inspect it."""
+def import_database(filename, content, root=None):
+    """Copy an uploaded .db into the namespace and inspect it."""
 
     _ensure_upload_size(content)
+
+    scope, prefix, base = _scope_for(root)
+
+    _purge(scope)
 
     file_id = _new_id()
     stored_name = f"{file_id}_{_sanitize_filename(filename)}"
 
-    target = os.path.join(_subdir("databases"), stored_name)
+    store = _object_store()
+    key = _key(prefix, "databases", stored_name)
+    store.put(key, content)
 
-    with open(target, "wb") as handle:
-        handle.write(content)
+    inspected = inspect_upload(store.materialize(key))
 
-    inspected = inspect_upload(target)
+    _save_import(
+        file_id,
+        scope,
+        prefix,
+        "database",
+        filename,
+        stored_name,
+        "databases",
+        len(content),
+        inspected,
+        {},
+    )
 
     return {
         "id": file_id,
         "kind": "database",
         "filename": filename,
-        "path": os.path.relpath(target, _upload_root()),
+        "path": f"databases/{stored_name}",
         **inspected,
     }
 
@@ -158,10 +312,14 @@ def _split_statements(text):
     return statements
 
 
-def import_sql_script(filename, content):
+def import_sql_script(filename, content, root=None):
     """Execute an uploaded SQL script into a fresh sandbox database."""
 
     _ensure_upload_size(content)
+
+    scope, prefix, base = _scope_for(root)
+
+    _purge(scope)
 
     try:
         text = content.decode("utf-8")
@@ -180,59 +338,85 @@ def import_sql_script(filename, content):
         )
 
     file_id = _new_id()
-    target = os.path.join(
-        _subdir("sandboxes"),
-        f"{file_id}_sandbox.db",
+    stored_name = f"{file_id}_sandbox.db"
+
+    # The database is built in a throwaway directory and only the
+    # finished bytes are handed to storage, so a failure part-way
+    # through leaves nothing behind in the namespace.
+    with tempfile.TemporaryDirectory(
+        prefix="tiix-import-"
+    ) as workspace:
+
+        target = os.path.join(workspace, "sandbox.db")
+
+        connection = sqlite3.connect(target)
+        connection.execute("PRAGMA foreign_keys = ON")
+
+        try:
+
+            for statement in statements:
+
+                if not _STATEMENT_START_RE.match(statement):
+                    raise ValidationError(
+                        "Only CREATE TABLE/INDEX/VIEW and INSERT INTO "
+                        "statements are allowed in imported SQL scripts. "
+                        f"Rejected: {statement[:80]}"
+                    )
+
+                lower = statement.lower()
+                if any(
+                    word in lower
+                    for word in [
+                        "attach",
+                        "detach",
+                        "vacuum",
+                        "load_extension",
+                    ]
+                ):
+                    raise ValidationError(
+                        "Import scripts cannot ATTACH/VACUUM or load "
+                        "extensions."
+                    )
+
+                connection.execute(statement)
+
+            connection.commit()
+
+        except Exception:
+
+            connection.rollback()
+            connection.close()
+            raise
+
+        else:
+
+            connection.close()
+
+        inspected = inspect_upload(target)
+        data = _read_object_bytes(target)
+
+    store = _object_store()
+    key = _key(prefix, "sandboxes", stored_name)
+    store.put(key, data)
+
+    _save_import(
+        file_id,
+        scope,
+        prefix,
+        "sql_script",
+        filename,
+        stored_name,
+        "sandboxes",
+        len(data),
+        inspected,
+        {"statement_count": len(statements)},
     )
-
-    connection = sqlite3.connect(target)
-    connection.execute("PRAGMA foreign_keys = ON")
-
-    try:
-
-        for statement in statements:
-
-            if not _STATEMENT_START_RE.match(statement):
-                raise ValidationError(
-                    "Only CREATE TABLE/INDEX/VIEW and INSERT INTO "
-                    "statements are allowed in imported SQL scripts. "
-                    f"Rejected: {statement[:80]}"
-                )
-
-            lower = statement.lower()
-            if any(
-                word in lower
-                for word in ["attach", "detach", "vacuum", "load_extension"]
-            ):
-                raise ValidationError(
-                    "Import scripts cannot ATTACH/VACUUM or load extensions."
-                )
-
-            connection.execute(statement)
-
-        connection.commit()
-
-    except Exception:
-
-        connection.rollback()
-        connection.close()
-
-        if os.path.exists(target):
-            os.remove(target)
-
-        raise
-
-    else:
-
-        connection.close()
-
-    inspected = inspect_upload(target)
 
     return {
         "id": file_id,
         "kind": "sql_script",
         "filename": filename,
-        "path": os.path.relpath(target, _upload_root()),
+        "path": f"sandboxes/{stored_name}",
         "statement_count": len(statements),
         **inspected,
     }
@@ -295,10 +479,14 @@ def _normalize_cell(value):
     return str(value)
 
 
-def import_excel(filename, content):
+def import_excel(filename, content, root=None):
     """Convert an .xlsx workbook into a sandbox SQLite database."""
 
     _ensure_upload_size(content)
+
+    scope, prefix, base = _scope_for(root)
+
+    _purge(scope)
 
     from openpyxl import load_workbook
 
@@ -309,123 +497,151 @@ def import_excel(filename, content):
     )
 
     file_id = _new_id()
-    target = os.path.join(
-        _subdir("sandboxes"),
-        f"{file_id}_excel.db",
-    )
+    stored_name = f"{file_id}_excel.db"
 
-    connection = sqlite3.connect(target)
+    with tempfile.TemporaryDirectory(
+        prefix="tiix-import-"
+    ) as workspace:
 
-    try:
+        target = os.path.join(workspace, "excel.db")
 
-        sheet_count = 0
-        row_count = 0
-        truncated = False
+        connection = sqlite3.connect(target)
 
-        for index, sheet in enumerate(workbook.worksheets, start=1):
+        try:
 
-            rows = sheet.iter_rows(values_only=True)
+            sheet_count = 0
+            row_count = 0
+            truncated = False
 
-            try:
-                header_row = next(rows)
-            except StopIteration:
-                continue
+            for index, sheet in enumerate(
+                workbook.worksheets, start=1
+            ):
 
-            header = []
-            seen = set()
+                rows = sheet.iter_rows(values_only=True)
 
-            for column_index, raw in enumerate(header_row, start=1):
-                name = _unique_header(
-                    column_index,
-                    re.sub(r"\s+", "_", str(raw or "")).strip("_"),
-                )
-                while name in seen:
-                    name = f"{name}_2"
-                seen.add(name)
-                header.append(name)
+                try:
+                    header_row = next(rows)
+                except StopIteration:
+                    continue
 
-            if not header:
-                continue
+                header = []
+                seen = set()
 
-            data_rows = []
+                for column_index, raw in enumerate(
+                    header_row, start=1
+                ):
+                    name = _unique_header(
+                        column_index,
+                        re.sub(
+                            r"\s+", "_", str(raw or "")
+                        ).strip("_"),
+                    )
+                    while name in seen:
+                        name = f"{name}_2"
+                    seen.add(name)
+                    header.append(name)
 
-            for values in rows:
+                if not header:
+                    continue
 
-                if len(data_rows) >= config.MAX_IMPORT_ROWS:
-                    # The cap is reached and there is at least one more
-                    # row to read, so data is being dropped. Recorded
-                    # rather than left silent.
-                    truncated = True
-                    break
+                data_rows = []
 
-                data_rows.append(
-                    [
-                        _normalize_cell(v)
-                        for v in values[: len(header)]
+                for values in rows:
+
+                    if len(data_rows) >= config.MAX_IMPORT_ROWS:
+                        # The cap is reached and there is at least one
+                        # more row to read, so data is being dropped.
+                        # Recorded rather than left silent.
+                        truncated = True
+                        break
+
+                    data_rows.append(
+                        [
+                            _normalize_cell(v)
+                            for v in values[: len(header)]
+                        ]
+                        + [None] * max(0, len(header) - len(values))
+                    )
+
+                if not data_rows:
+                    continue
+
+                columns = []
+
+                for column_index, name in enumerate(header):
+                    column_values = [
+                        row[column_index] for row in data_rows
                     ]
-                    + [None] * max(0, len(header) - len(values))
+                    columns.append(
+                        f"{name} "
+                        f"{_infer_column_type(column_values)}"
+                    )
+
+                table_name = _sanitize_table_name(sheet.title, index)
+
+                connection.execute(
+                    f"CREATE TABLE {table_name} "
+                    f"({', '.join(columns)})"
                 )
 
-            if not data_rows:
-                continue
-
-            columns = []
-
-            for column_index, name in enumerate(header):
-                column_values = [
-                    row[column_index] for row in data_rows
-                ]
-                columns.append(
-                    f"{name} {_infer_column_type(column_values)}"
+                placeholders = ", ".join(["?"] * len(header))
+                connection.executemany(
+                    f"INSERT INTO {table_name} "
+                    f"({', '.join(header)}) VALUES ({placeholders})",
+                    [tuple(row) for row in data_rows],
                 )
 
-            table_name = _sanitize_table_name(sheet.title, index)
+                sheet_count += 1
+                row_count += len(data_rows)
 
-            connection.execute(
-                f"CREATE TABLE {table_name} ({', '.join(columns)})"
+            connection.commit()
+
+        except Exception:
+
+            connection.rollback()
+            connection.close()
+            workbook.close()
+            raise
+
+        else:
+
+            connection.close()
+            workbook.close()
+
+        if sheet_count == 0:
+            raise ValidationError(
+                "The Excel file contains no importable sheets."
             )
 
-            placeholders = ", ".join(["?"] * len(header))
-            connection.executemany(
-                f"INSERT INTO {table_name} "
-                f"({', '.join(header)}) VALUES ({placeholders})",
-                [tuple(row) for row in data_rows],
-            )
+        inspected = inspect_upload(target)
+        data = _read_object_bytes(target)
 
-            sheet_count += 1
-            row_count += len(data_rows)
+    store = _object_store()
+    key = _key(prefix, "sandboxes", stored_name)
+    store.put(key, data)
 
-        connection.commit()
-
-    except Exception:
-
-        connection.rollback()
-        connection.close()
-
-        if os.path.exists(target):
-            os.remove(target)
-
-        workbook.close()
-
-        raise
-
-    else:
-
-        connection.close()
-        workbook.close()
-
-    if sheet_count == 0:
-        if os.path.exists(target):
-            os.remove(target)
-        raise ValidationError("The Excel file contains no importable sheets.")
-
-    inspected = inspect_upload(target)
+    _save_import(
+        file_id,
+        scope,
+        prefix,
+        "excel",
+        filename,
+        stored_name,
+        "sandboxes",
+        len(data),
+        inspected,
+        {
+            "sheet_count": sheet_count,
+            "row_count": row_count,
+            "truncated": truncated,
+        },
+    )
 
     return {
         "id": file_id,
         "kind": "excel",
         "filename": filename,
-        "path": os.path.relpath(target, _upload_root()),
+        "path": f"sandboxes/{stored_name}",
         "sheet_count": sheet_count,
         "row_count": row_count,
         "truncated": truncated,
@@ -535,10 +751,14 @@ def _coerce_csv_value(value):
     return text
 
 
-def import_csv(filename, content):
+def import_csv(filename, content, root=None):
     """Convert an uploaded .csv into a sandbox SQLite database."""
 
     _ensure_upload_size(content)
+
+    scope, prefix, base = _scope_for(root)
+
+    _purge(scope)
 
     rows = _read_csv_rows(_decode_text(content))
 
@@ -586,50 +806,71 @@ def import_csv(filename, content):
     )
 
     file_id = _new_id()
-    target = os.path.join(
-        _subdir("sandboxes"),
-        f"{file_id}_csv.db",
+    stored_name = f"{file_id}_csv.db"
+
+    with tempfile.TemporaryDirectory(
+        prefix="tiix-import-"
+    ) as workspace:
+
+        target = os.path.join(workspace, "csv.db")
+
+        connection = sqlite3.connect(target)
+
+        try:
+
+            connection.execute(
+                f"CREATE TABLE {table_name} "
+                f"({', '.join(columns)})"
+            )
+
+            placeholders = ", ".join(["?"] * len(header))
+
+            connection.executemany(
+                f"INSERT INTO {table_name} "
+                f"({', '.join(header)}) VALUES ({placeholders})",
+                [tuple(row) for row in normalized],
+            )
+
+            connection.commit()
+
+        except Exception:
+
+            connection.rollback()
+            connection.close()
+            raise
+
+        else:
+
+            connection.close()
+
+        inspected = inspect_upload(target)
+        data = _read_object_bytes(target)
+
+    store = _object_store()
+    key = _key(prefix, "sandboxes", stored_name)
+    store.put(key, data)
+
+    _save_import(
+        file_id,
+        scope,
+        prefix,
+        "csv",
+        filename,
+        stored_name,
+        "sandboxes",
+        len(data),
+        inspected,
+        {
+            "row_count": len(normalized),
+            "truncated": truncated,
+        },
     )
-
-    connection = sqlite3.connect(target)
-
-    try:
-
-        connection.execute(
-            f"CREATE TABLE {table_name} ({', '.join(columns)})"
-        )
-
-        placeholders = ", ".join(["?"] * len(header))
-
-        connection.executemany(
-            f"INSERT INTO {table_name} "
-            f"({', '.join(header)}) VALUES ({placeholders})",
-            [tuple(row) for row in normalized],
-        )
-
-        connection.commit()
-
-    except Exception:
-
-        connection.rollback()
-        connection.close()
-
-        if os.path.exists(target):
-            os.remove(target)
-
-        raise
-
-    else:
-
-        connection.close()
-
-    inspected = inspect_upload(target)
 
     return {
         "id": file_id,
         "kind": "csv",
         "filename": filename,
-        "path": os.path.relpath(target, _upload_root()),
+        "path": f"sandboxes/{stored_name}",
         "row_count": len(normalized),
         "truncated": truncated,
         **inspected,
@@ -640,22 +881,27 @@ def import_csv(filename, content):
 # ROUTER
 # ============================================================
 
-def import_file(filename, content):
-    """Dispatch an upload by extension. Never touches store.db."""
+def import_file(filename, content, root=None):
+    """Dispatch an upload by extension. Never touches store.db.
+
+    ``root`` selects the namespace. It defaults to the shared upload
+    root (the owner path); a visitor passes their own visitor root,
+    which confines the resulting file to their namespace.
+    """
 
     extension = os.path.splitext(filename)[1].lower()
 
     if extension in config.ALLOWED_DATABASE_EXTENSIONS:
-        return import_database(filename, content)
+        return import_database(filename, content, root=root)
 
     if extension in config.ALLOWED_SQL_EXTENSIONS:
-        return import_sql_script(filename, content)
+        return import_sql_script(filename, content, root=root)
 
     if extension in config.ALLOWED_EXCEL_EXTENSIONS:
-        return import_excel(filename, content)
+        return import_excel(filename, content, root=root)
 
     if extension in config.ALLOWED_CSV_EXTENSIONS:
-        return import_csv(filename, content)
+        return import_csv(filename, content, root=root)
 
     raise ValidationError(
         "Unsupported file type. "
@@ -663,165 +909,208 @@ def import_file(filename, content):
     )
 
 
-def resolve_import_path(import_id):
-    """Absolute path of a stored import, confined to the upload root.
+def resolve_import_path(import_id, root=None):
+    """Local path of a stored import, confined to the given namespace.
 
-    Raises ValidationError for a malformed id or any resolved path that
-    would escape UPLOAD_DIR, and ImportNotFound when a well-formed id
-    matches nothing. It never falls back to the caller's default: an
+    Raises ValidationError for a malformed id and ImportNotFound when a
+    well-formed id matches no recorded import in this namespace or its
+    object is missing. It never falls back to the caller's default: an
     explicit import_id either resolves to a stored file or fails.
 
-    The id is only ever used as a filename prefix under the two known
-    sandbox subdirectories, and the resolved path is checked against
-    the real upload root, so a value containing a separator or a parent
-    reference cannot reach outside it.
+    The local path is produced by ObjectStore.materialize, which for a
+    remote backend downloads the object to a local cache. That is the
+    point of the indirection: the SQLite read path needs a real file,
+    and where the bytes actually live is the backend's concern.
     """
 
     if not import_id or not _IMPORT_ID_RE.match(import_id):
         raise ValidationError("Invalid import id.")
 
-    root = os.path.realpath(_upload_root())
-    prefix = import_id + "_"
+    scope, prefix, base = _scope_for(root)
 
-    for sub in ["databases", "sandboxes"]:
+    record = _metadata_store().get(scope, import_id)
 
-        directory = os.path.join(root, sub)
+    if not record or record.get("scope") != scope:
+        raise ImportNotFound("Import not found.")
 
-        if not os.path.isdir(directory):
-            continue
+    store = _object_store()
+    key = record.get("object_key")
 
-        for filename in os.listdir(directory):
+    if not key or not store.exists(key):
+        raise ImportNotFound("Import not found.")
 
-            if not filename.startswith(prefix):
-                continue
-
-            candidate = os.path.realpath(
-                os.path.join(directory, filename)
-            )
-
-            # Belt and braces: os.listdir cannot return a name with a
-            # separator, but the confinement check is what actually
-            # guarantees the returned path stays under the upload root
-            # even if a stored filename held one.
-            try:
-                inside = (
-                    os.path.commonpath([candidate, root]) == root
-                )
-            except ValueError:
-                inside = False
-
-            if not inside:
-                raise ValidationError("Invalid import path.")
-
-            if os.path.isfile(candidate):
-                return candidate
-
-    raise ImportNotFound("Import not found.")
+    return store.materialize(key)
 
 
-def delete_import(import_id):
-    """Remove an imported file from any sandbox subdirectory."""
+def delete_import(import_id, root=None):
+    """Remove an import's object and metadata record from a namespace."""
 
     if not import_id or not _IMPORT_ID_RE.match(import_id):
         return False
 
-    prefix = import_id + "_"
+    scope, prefix, base = _scope_for(root)
 
-    for sub in ["databases", "sandboxes"]:
+    metadata = _metadata_store()
+    record = metadata.get(scope, import_id)
 
-        directory = os.path.join(_upload_root(), sub)
+    if not record or record.get("scope") != scope:
+        return False
 
-        if not os.path.isdir(directory):
-            continue
+    key = record.get("object_key")
 
-        for filename in os.listdir(directory):
+    if key:
+        try:
+            _object_store().delete(key)
+        except storage.StorageError:
+            pass
 
-            if filename.startswith(prefix):
+    metadata.delete(scope, import_id)
 
-                os.remove(os.path.join(directory, filename))
-                return True
-
-    return False
+    return True
 
 
-def get_import(import_id):
+def get_import(import_id, root=None):
     """Look up an import by id, inspecting it on demand."""
 
     if not import_id or not _IMPORT_ID_RE.match(import_id):
         return None
 
-    prefix = import_id + "_"
+    scope, prefix, base = _scope_for(root)
 
-    for sub in ["databases", "sandboxes"]:
+    record = _metadata_store().get(scope, import_id)
 
-        directory = os.path.join(_upload_root(), sub)
+    if not record or record.get("scope") != scope:
+        return None
 
-        if not os.path.isdir(directory):
-            continue
+    store = _object_store()
+    key = record.get("object_key")
 
-        for filename in os.listdir(directory):
+    if not key or not store.exists(key):
+        return None
 
-            if filename == prefix.rstrip("_"):  # unlikely
-                pass
-
-            if filename.startswith(prefix):
-                path = os.path.join(directory, filename)
-
-                return {
-                    "id": import_id,
-                    "kind": _kind_for(sub, filename),
-                    "filename": filename,
-                    "path": os.path.relpath(path, _upload_root()),
-                    **inspect_upload(path),
-                }
-
-    return None
+    return {
+        "id": import_id,
+        "kind": record.get("kind"),
+        "filename": record.get("stored_name"),
+        "path": record.get("path"),
+        **inspect_upload(store.materialize(key)),
+    }
 
 
-def _kind_for(sub, filename):
-    """Best-effort import kind from the sandbox a file lives in.
-
-    Databases keep their own name. A sandbox file is named after the
-    importer that produced it, so the suffix distinguishes a SQL
-    script from a converted Excel or CSV workbook without opening it.
-    """
-
-    if sub == "databases":
-        return "database"
-
-    if filename.endswith("_excel.db"):
-        return "excel"
-
-    if filename.endswith("_csv.db"):
-        return "csv"
-
-    return "sql_script"
-
-
-def list_imports():
+def list_imports(root=None):
     """List stored imports without re-inspecting each file."""
 
-    items = []
+    scope, prefix, base = _scope_for(root)
 
-    for sub in ["databases", "sandboxes"]:
+    records = [
+        record
+        for record in _metadata_store().list(scope)
+        if record.get("scope") == scope
+    ]
 
-        directory = os.path.join(_upload_root(), sub)
+    records.sort(
+        key=lambda record: (
+            record.get("created_at", 0),
+            record.get("id", ""),
+        )
+    )
 
-        if not os.path.isdir(directory):
+    return [
+        {
+            "id": record.get("id"),
+            "kind": record.get("kind"),
+            "filename": record.get("stored_name"),
+            "path": record.get("path"),
+        }
+        for record in records
+    ]
+
+
+# ============================================================
+# EXPIRY
+# ============================================================
+# A visitor identity expires with its cookie; the files it uploaded
+# should not outlive it. There is no scheduler here, so expiry is
+# swept on the next import in the same namespace: the operation that
+# adds a record is also the one that removes the stale ones, which
+# keeps the store bounded without a background job the platform may
+# not run. Zero disables the sweep.
+
+def _purge(scope, now=None):
+    """Delete records older than UPLOAD_TTL_SECONDS in one namespace."""
+
+    ttl = int(getattr(config, "UPLOAD_TTL_SECONDS", 0) or 0)
+
+    if ttl <= 0:
+        return 0
+
+    current = float(now) if now is not None else time.time()
+
+    metadata = _metadata_store()
+    objects = _object_store()
+
+    removed = 0
+
+    for record in metadata.list(scope):
+
+        if record.get("scope") != scope:
             continue
 
-        for filename in sorted(os.listdir(directory)):
+        created = record.get("created_at")
 
-            if not filename.endswith(".db"):
-                continue
+        if not isinstance(created, (int, float)):
+            continue
 
-            items.append(
-                {
-                    "id": filename.split("_", 1)[0],
-                    "kind": _kind_for(sub, filename),
-                    "filename": filename,
-                    "path": os.path.join(sub, filename),
-                }
-            )
+        if current - created <= ttl:
+            continue
 
-    return items
+        key = record.get("object_key")
+
+        if key:
+            try:
+                objects.delete(key)
+            except storage.StorageError:
+                pass
+
+        metadata.delete(scope, record.get("id"))
+        removed += 1
+
+    return removed
+
+
+def purge_expired_imports(root=None, now=None):
+    """Sweep expired imports in the given namespace (default: shared)."""
+
+    scope, prefix, base = _scope_for(root)
+
+    return _purge(scope, now=now)
+
+
+# ============================================================
+# VISITOR NAMESPACE
+# ============================================================
+# Thin wrappers that pin every call to a single visitor's root. They
+# exist so a route can never forget the root argument and fall back to
+# the shared namespace by accident: the only way to reach a visitor's
+# files is through a function whose name says "visitor".
+
+def import_file_for_visitor(visitor_id, filename, content):
+    return import_file(
+        filename, content, root=_visitor_root(visitor_id)
+    )
+
+
+def list_visitor_imports(visitor_id):
+    return list_imports(root=_visitor_root(visitor_id))
+
+
+def resolve_visitor_import_path(visitor_id, import_id):
+    return resolve_import_path(
+        import_id, root=_visitor_root(visitor_id)
+    )
+
+
+def delete_visitor_import(visitor_id, import_id):
+    return delete_import(
+        import_id, root=_visitor_root(visitor_id)
+    )

@@ -7,8 +7,8 @@ guard is attached once, to the router.
 
 The public surface is not a list of paths typed here: it is read from
 the visitor router itself, so a route can only be public by being
-deliberately registered there, and the four public endpoints are pinned
-by name so the exception cannot quietly widen.
+deliberately registered there, and every public endpoint is pinned by
+name so the exception cannot quietly widen.
 """
 
 import re
@@ -123,20 +123,64 @@ def test_discovery_found_the_protected_surface():
     assert ("GET", "/api/version", "/api/version") in PROTECTED_ENDPOINTS
 
 
-def test_the_public_surface_is_exactly_the_four_deliberate_routes():
-    """Pins the exception, so a fifth public route cannot appear quietly.
+def test_the_public_surface_is_exactly_the_deliberate_routes():
+    """Pins the exception, so a further public route cannot appear quietly.
 
     /api/ask is here because it is gated per request by
     app/access.py rather than by the router: an owner session, the
-    application access key, an App Access Code, or a free attempt. The
-    other three are how a visitor arrives or what they need on arrival.
+    application access key, an App Access Code, or a free attempt.
+
+    /api/public/schema is the read-only schema a visitor needs on
+    arrival. The /api/access/* pair is how a visitor unlocks or asks for
+    a code.
+
+    The /api/visitor/* routes are the frictionless demo surface: a
+    browser that holds no credential must be able to upload a file,
+    drive the Sessions, Approvals and PDF-report panels, and read back
+    only its own data. They are safe by NAMESPACE, not by credential -
+    every one resolves inside the caller's own signed visitor id
+    (app/visitor.py) - which is why they can be public while the owner
+    /api/upload, /api/imports, /api/sessions, /api/approvals and
+    /api/report stay guarded.
     """
 
     assert PUBLIC_ENDPOINTS == [
+        (
+            "DELETE",
+            "/api/visitor/imports/{import_id}",
+            "/api/visitor/imports/unknown-id",
+        ),
+        (
+            "DELETE",
+            "/api/visitor/sessions/{session_id}",
+            "/api/visitor/sessions/unknown-id",
+        ),
         ("GET", "/api/public/schema", "/api/public/schema"),
+        ("GET", "/api/visitor/approvals", "/api/visitor/approvals"),
+        ("GET", "/api/visitor/imports", "/api/visitor/imports"),
+        ("GET", "/api/visitor/schema", "/api/visitor/schema"),
+        ("GET", "/api/visitor/sessions", "/api/visitor/sessions"),
+        (
+            "GET",
+            "/api/visitor/sessions/{session_id}",
+            "/api/visitor/sessions/unknown-id",
+        ),
         ("POST", "/api/access/request", "/api/access/request"),
         ("POST", "/api/access/unlock", "/api/access/unlock"),
         ("POST", "/api/ask", "/api/ask"),
+        (
+            "POST",
+            "/api/visitor/approvals/{approval_id}/approve",
+            "/api/visitor/approvals/unknown-id/approve",
+        ),
+        (
+            "POST",
+            "/api/visitor/approvals/{approval_id}/reject",
+            "/api/visitor/approvals/unknown-id/reject",
+        ),
+        ("POST", "/api/visitor/imports", "/api/visitor/imports"),
+        ("POST", "/api/visitor/report", "/api/visitor/report"),
+        ("POST", "/api/visitor/sessions", "/api/visitor/sessions"),
     ]
 
 

@@ -104,6 +104,27 @@ def _flag_env(name, default=False):
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _non_negative_int_env(name, default):
+    """Read a non-negative integer from the environment, else fall back.
+
+    Unlike _positive_int_env, zero is a meaningful value here (it
+    disables the feature), so it is accepted; a negative or malformed
+    value falls back rather than being clamped silently.
+    """
+
+    raw = os.getenv(name)
+
+    if not raw:
+        return default
+
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+
+    return value if value >= 0 else default
+
+
 # 12 hours: long enough to get through a working session, short
 # enough that a leaked cookie stops being useful quickly.
 AUTH_SESSION_TTL_SECONDS = _positive_int_env(
@@ -131,11 +152,13 @@ AUTH_COOKIE_SECURE = _flag_env(
 # admin secret to every visitor, which is the one thing this design
 # refuses to do.
 #
-# APP_ACCESS_CODE IS a secret (it grants paid provider calls) but it is
-# deliberately defaulted so the demo works out of the box. Change it
-# before exposing the deployment to anyone.
+# APP_ACCESS_CODE IS a secret (it grants paid provider calls) and it is
+# deliberately NOT defaulted. An unset code must fail closed - nobody can
+# unlock - rather than fall back to a value published in this repository,
+# which would let anyone who reads the source straight through the gate.
+# Set it in the deployment environment, never in a committed file.
 
-APP_ACCESS_CODE = os.getenv("APP_ACCESS_CODE", "1234")
+APP_ACCESS_CODE = (os.getenv("APP_ACCESS_CODE") or "").strip()
 
 # Optional dedicated signing secret for the visitor cookies. It is not
 # required: app/access.py derives the signing key from APP_API_KEY
@@ -146,6 +169,14 @@ ACCESS_SIGNING_SECRET = os.getenv("ACCESS_SIGNING_SECRET")
 
 ACCESS_COOKIE_NAME = os.getenv("ACCESS_COOKIE_NAME", "tiix_access")
 TRIAL_COOKIE_NAME = os.getenv("TRIAL_COOKIE_NAME", "tiix_trial")
+
+# Anonymous, per-browser identity for visitor uploads and imports. It is
+# NOT a credential: it grants no access to the guarded API and carries no
+# secret. It exists only so that a visitor's own uploads live in a
+# namespace keyed to their browser instead of a single shared one, which
+# is what makes one visitor's imports unreadable to another. See
+# app/visitor.py.
+VISITOR_COOKIE_NAME = os.getenv("VISITOR_COOKIE_NAME", "tiix_visitor")
 
 # Same window as an authenticated session: long enough to finish a
 # working session, short enough that a leaked cookie stops being
@@ -165,9 +196,21 @@ TRIAL_SESSION_TTL_SECONDS = _positive_int_env(
     2592000,
 )
 
+# The anonymous visitor identity lives as long as the trial allowance,
+# and for the same reason: a visitor should keep access to the files they
+# uploaded for as long as they can keep asking questions about them.
+VISITOR_SESSION_TTL_SECONDS = _positive_int_env(
+    "VISITOR_SESSION_TTL_SECONDS",
+    2592000,
+)
+
+# Six free questions per browser: enough to demonstrate the product,
+# small enough that the App Access Code is the natural next step. The
+# frontend and the refusal message both read this value, so changing it
+# here changes the trial everywhere at once.
 TRIAL_MAX_ATTEMPTS = _positive_int_env(
     "TRIAL_MAX_ATTEMPTS",
-    5,
+    6,
 )
 
 # Shown to a visitor in the access modal. Deliberately configurable
@@ -282,6 +325,110 @@ ALLOWED_DATABASE_EXTENSIONS = (".db", ".sqlite", ".sqlite3")
 ALLOWED_SQL_EXTENSIONS = (".sql",)
 ALLOWED_EXCEL_EXTENSIONS = (".xlsx",)
 ALLOWED_CSV_EXTENSIONS = (".csv",)
+
+# ------------------------------------------------------------
+# UPLOAD STORAGE
+# ------------------------------------------------------------
+# Where an uploaded import lives between the request that stored it and
+# the request that queries it. See app/storage.py.
+#
+# STORAGE_BACKEND selects the provider:
+#
+#   "local" (default) - a filesystem store, perfect for development and
+#                       tests and the WRONG answer on Vercel, where each
+#                       function instance has its own /tmp and a
+#                       read-only filesystem.
+#   "r2"              - Cloudflare R2 over its S3-compatible API, the
+#                       durable backend; see the R2 section below.
+#
+# Any other value, "r2" with incomplete credentials, or "local" while
+# STORAGE_REQUIRE_PERSISTENT is set, fails closed with a 503 rather than
+# silently writing to ephemeral storage. See DEPLOYMENT.md.
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
+
+# Set this in production to make the app refuse to upload at all while
+# only ephemeral storage is configured. It turns a silent, hard-to-see
+# data-loss bug into a loud, immediate 503.
+STORAGE_REQUIRE_PERSISTENT = _flag_env(
+    "STORAGE_REQUIRE_PERSISTENT",
+    default=False,
+)
+
+# How long an import is kept before the next import in its namespace
+# sweeps it away. Zero disables expiry. The default matches the visitor
+# cookie lifetime, so a visitor's files live as long as the identity
+# that owns them and no longer.
+UPLOAD_TTL_SECONDS = _non_negative_int_env(
+    "UPLOAD_TTL_SECONDS",
+    2592000,
+)
+
+
+# ------------------------------------------------------------
+# UPLOAD STORAGE: CLOUDFLARE R2 (S3-COMPATIBLE)
+# ------------------------------------------------------------
+# The durable backend, selected with STORAGE_BACKEND=r2. It is an S3
+# implementation of the ObjectStore/MetadataStore interfaces in
+# app/storage.py, talking to R2 over its S3-compatible endpoint.
+#
+# ALL FOUR of R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+# and R2_BUCKET must be present or the backend is treated as NOT
+# configured: get_stores() then fails closed and every storage path
+# answers 503. The application never silently falls back to the local
+# filesystem, because on Vercel that is a per-instance /tmp and the
+# upload would appear to succeed and then vanish.
+#
+# None of these values is ever logged or returned in a response; only
+# storage.status() (a backend name and two booleans) is exposed.
+#
+#   R2_ENDPOINT  optional; defaults to
+#                https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
+#   R2_REGION    optional; defaults to "auto" (correct for R2)
+#   R2_PREFIX    optional key prefix, so one bucket can be shared with
+#                another application without collisions
+
+
+def r2_settings():
+    """The R2 configuration, or None while it is incomplete.
+
+    Read at call time rather than import time, so a rotated credential
+    or a test override takes effect immediately, and so a partially
+    configured backend is a clean "not configured" instead of a
+    half-built client. Returns a dict; never log it, it carries the
+    secret access key.
+    """
+
+    required = {
+        "account_id": (os.getenv("R2_ACCOUNT_ID") or "").strip(),
+        "access_key_id": (
+            os.getenv("R2_ACCESS_KEY_ID") or ""
+        ).strip(),
+        "secret_access_key": (
+            os.getenv("R2_SECRET_ACCESS_KEY") or ""
+        ).strip(),
+        "bucket": (os.getenv("R2_BUCKET") or "").strip(),
+    }
+
+    if not all(required.values()):
+        return None
+
+    endpoint = (os.getenv("R2_ENDPOINT") or "").strip()
+
+    if not endpoint:
+        endpoint = (
+            "https://"
+            + required["account_id"]
+            + ".r2.cloudflarestorage.com"
+        )
+
+    return {
+        **required,
+        "endpoint": endpoint,
+        "region": (os.getenv("R2_REGION") or "auto").strip()
+        or "auto",
+        "prefix": (os.getenv("R2_PREFIX") or "").strip().strip("/"),
+    }
+
 
 # ------------------------------------------------------------
 # LLM

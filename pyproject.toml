@@ -24,6 +24,7 @@ dependencies = [
     "openpyxl",
     "reportlab",
     "python-multipart",
+    "boto3",
 ]
 
 # Development only. Never installed by the deployment build.

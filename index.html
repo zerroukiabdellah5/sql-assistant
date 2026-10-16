@@ -527,6 +527,8 @@
         .access-label { display: block; margin: 14px 0 6px; color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; text-align: left; }
         .access-contact { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted-2); font-size: 11px; line-height: 1.65; text-align: left; }
         .access-contact strong { color: var(--text-soft); font-weight: 600; }
+        .access-contact a { color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+        .access-contact a:hover { text-decoration: underline; }
         .access-status { display: none; margin-top: 12px; color: var(--accent-ink); font-size: 11px; line-height: 1.6; text-align: left; }
         .access-status.show { display: block; }
         .access-status.bad { color: var(--danger); }
@@ -549,8 +551,9 @@
     <div class="auth-card">
         <div class="access-title">Access code required</div>
         <p class="access-note" id="accessMessage">
-            Your free attempts have been used. Enter an App Access
-            Code to keep asking questions.
+            Your free trial of 6 questions has ended. Enter an App
+            Access Code to keep asking questions, or contact the
+            owner to request one.
         </p>
 
         <label class="access-label" for="accessCodeInput">App access code</label>
@@ -591,12 +594,16 @@
     </div>
 </div>
 
-<!-- Sign-in gate. Hidden until a protected API call answers 401. The
-     form posts natively to /api/auth/login-form, so the secret is
-     submitted by the browser and never enters JavaScript. This is the
-     OWNER surface only: sessions, uploads, approvals and reports stay
-     behind the application access key. A visitor with no credential
-     never reaches it, because nothing they can click is guarded. -->
+<!-- Sign-in gate. Hidden until a protected API call answers 401 AND the
+     user has actually asked for something protected. The upload workflow
+     never opens it by itself: the import panel and the import itself
+     both use the visitor upload routes, which need no credential and
+     answer inside the panel. The form posts natively to
+     /api/auth/login-form, so the secret is submitted by the browser and
+     never enters JavaScript. This is the OWNER surface only: sessions,
+     approvals and reports stay behind the application access key. A
+     visitor with no credential never reaches it by simply loading the
+     page, because nothing that runs on page load is guarded. -->
 <div class="auth-backdrop auth-gate" id="authGate">
     <form class="auth-card" method="post" action="/api/auth/login-form">
         <div class="auth-title">Sign in</div>
@@ -907,7 +914,9 @@
             <button class="export-btn mt-4" onclick="handleUpload()">Import file</button>
             <p class="ws-hint">Accepted: .db / .sqlite / .sqlite3 / .sql / .xlsx / .csv<br>
                 Files are copied into an isolated sandbox. SQL scripts run only inside a
-                brand-new throwaway database — they can never touch store.db.</p>
+                brand-new throwaway database — they can never touch store.db.<br>
+                Imports are private to this browser: only it can list, query or
+                delete what it uploads.</p>
         </div>
         <div id="uploadResult" class="workspace-section"></div>
         <div class="workspace-section">
@@ -945,16 +954,41 @@
        used - never on page load.
 
        OWNER (the sign-in gate below): the application access key
-       still guards sessions, uploads, approvals and reports. It is
-       typed into a NATIVE form in the markup and submitted by the
+       still guards sessions, approvals and reports. It is typed
+       into a NATIVE form in the markup and submitted by the
        browser straight to /api/auth/login-form; no script reads
        it or posts it. A visitor never sees this, because nothing
-       reachable without a credential is behind it.
+       reachable without a credential is behind it. File imports
+       are deliberately NOT here: they use the visitor upload
+       routes, so a visitor can upload and query their own data
+       without ever meeting this gate.
     ===================================================== */
 
     /* The backend's own machine-readable code. Keyed on, never on
        the wording of the message. */
     const FREE_TRIAL_EXHAUSTED = "FREE_TRIAL_EXHAUSTED";
+
+
+    /* Owner contact, as a link the visitor can actually use. The
+       address comes from the server's answer, never from a literal in
+       this file, and it is a plain mailto: link: the visitor's own
+       mail client does the writing, because this application sends no
+       mail and never claims otherwise. */
+    function renderOwnerContact(container, address) {
+
+        container.hidden = false;
+        container.textContent = "";
+
+        container.appendChild(
+            document.createTextNode("Owner contact: ")
+        );
+
+        const link = document.createElement("a");
+        link.href = "mailto:" + address;
+        link.textContent = address;
+
+        container.appendChild(link);
+    }
 
 
     function showAccessModal(payload) {
@@ -975,7 +1009,9 @@
 
         /* The contact address is operator configuration, not part
            of the code, so it is read from the server's answer and
-           hidden entirely when it was not set. */
+           hidden entirely when it was not set. It is rendered as a
+           mailto link: the visitor writes to the owner themselves,
+           because nothing in this application sends mail. */
         const contact =
             document.getElementById("accessContact");
 
@@ -985,12 +1021,8 @@
             contact.textContent = "";
 
             if (payload && payload.owner_contact) {
-                contact.hidden = false;
-                contact.textContent = "Owner contact: ";
-                contact.appendChild(
-                    document.createTextNode(
-                        payload.owner_contact
-                    )
+                renderOwnerContact(
+                    contact, payload.owner_contact
                 );
             }
 
@@ -1200,12 +1232,8 @@
                 contact.hidden
             ) {
 
-                contact.hidden = false;
-                contact.textContent = "Owner contact: ";
-                contact.appendChild(
-                    document.createTextNode(
-                        result.owner_contact
-                    )
+                renderOwnerContact(
+                    contact, result.owner_contact
                 );
 
             }
@@ -1259,16 +1287,17 @@
            failure, so the caller can stop early instead of
            rendering a confusing error.
 
-           OWNER SURFACE ONLY. Every caller is an endpoint guarded
-           by require_auth: sessions, uploads, approvals and reports.
+           Callers are endpoints guarded by require_auth whose panel
+           is the owner's own tool: sessions, approvals and reports.
            It is never called from /api/ask, from the public schema
-           load or from the access modal, because those are the
-           visitor's paths and they have no owner credential to
-           offer - a visitor must never be shown a dialog asking for
-           the application access key. It also cannot become the
-           first thing an arriving visitor sees: the gate is
-           display:none until this function adds "open" to it, and
-           nothing runs on page load. */
+           load, from the access modal, nor from the UPLOAD workflow -
+           the upload panel and the schema of an upload use the visitor
+           routes, which need no credential and never answer 401, so a
+           visitor is never shown a dialog asking for the application
+           access key just for uploading or querying their own file. It
+           also cannot become the first thing an arriving visitor sees:
+           the gate is display:none until this function adds "open" to
+           it, and nothing runs on page load. */
         function handleAuthFailure(response) {
 
 
@@ -4659,9 +4688,25 @@
         if (which === "sessions") {
             loadSessions();
         } else if (which === "upload") {
+            /* The import list and the picker both use the visitor
+               upload routes, so they work for anyone: the list is keyed
+               to this browser's signed visitor cookie and needs no
+               credential, and the file picker opens straight away in
+               this same click. No sign-in gate is ever opened from
+               here. */
             loadImports();
+            openUploadPicker();
         } else if (which === "approvals") {
             loadApprovals();
+        }
+    }
+    function openUploadPicker() {
+        const input = document.getElementById("uploadInput");
+        if (input) {
+            /* Cleared first so re-picking the same file still counts
+               as a choice. */
+            input.value = "";
+            input.click();
         }
     }
     function closeWorkspace(event, which) {
@@ -4674,8 +4719,13 @@
        DATA SOURCE SELECTION
        ===================================================== */
     function sourceSchemaUrl() {
+        /* An uploaded import is described by the visitor schema route,
+           which resolves the import inside this browser's own namespace.
+           It needs no credential, so the same call serves a visitor and
+           an owner. The default database uses the public copy. */
         return selectedImportId
-            ? "/api/schema?import_id=" + encodeURIComponent(selectedImportId)
+            ? "/api/visitor/schema?import_id=" +
+                  encodeURIComponent(selectedImportId)
             : "/api/public/schema";
     }
     function currentSourceLabel() {
@@ -4698,7 +4748,7 @@
             meta.innerHTML =
                 escapeHtml(currentSourceLabel()) +
                 "<br>live schema via " +
-                (selectedImportId ? "guarded /api/schema" : "/api/public/schema");
+                (selectedImportId ? "/api/visitor/schema" : "/api/public/schema");
         }
         const tag = document.getElementById("sourceTag");
         if (tag) {
@@ -4782,10 +4832,11 @@
                 '<div class="history-empty thinking">Loading imports...</div>';
         }
         try {
-            const response = await fetch("/api/imports");
-            if (handleAuthFailure(response)) {
-                return;
-            }
+            /* The visitor import route, not the guarded /api/imports: it
+               lists the files this browser uploaded, keyed by the signed
+               visitor cookie, and needs no credential. Opening this
+               panel therefore never shows a sign-in prompt. */
+            const response = await fetch("/api/visitor/imports");
             if (!response.ok) {
                 throw new Error("Could not load imports.");
             }
@@ -4886,13 +4937,12 @@
             return;
         }
         try {
+            /* Confined to this browser's own namespace: the visitor
+               delete route can only remove a file it uploaded. */
             const response = await fetch(
-                "/api/imports/" + encodeURIComponent(id),
+                "/api/visitor/imports/" + encodeURIComponent(id),
                 { method: "DELETE" }
             );
-            if (handleAuthFailure(response)) {
-                return;
-            }
             if (!response.ok) {
                 throw new Error("Could not delete import.");
             }
@@ -5012,12 +5062,12 @@
 
         try {
 
-            const response = await fetch("/api/sessions");
+            /* The visitor session route, not the guarded /api/sessions:
+               it lists the sessions this browser saved, keyed by the
+               signed visitor cookie, and needs no credential. Opening
+               this panel therefore never shows a sign-in prompt. */
+            const response = await fetch("/api/visitor/sessions");
             const body = await response.json();
-
-            if (handleAuthFailure(response)) {
-                return;
-            }
 
             if (!body.sessions || !body.sessions.length) {
 
@@ -5098,7 +5148,9 @@
 
         try {
 
-            const response = await fetch("/api/sessions", {
+            /* Visitor route: a session under this browser's own signed
+               visitor cookie, so creating one needs no credential. */
+            const response = await fetch("/api/visitor/sessions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -5140,7 +5192,9 @@
 
         try {
 
-            await fetch("/api/sessions/" + id, {
+            /* Confined to this browser's own namespace: the visitor
+               session route can only delete a session it created. */
+            await fetch("/api/visitor/sessions/" + id, {
                 method: "DELETE"
             });
 
@@ -5183,14 +5237,13 @@
 
         try {
 
-            const response = await fetch("/api/upload", {
+            /* The visitor upload route. It needs no credential and files
+               the import under this browser's own namespace, so the
+               upload workflow never opens the sign-in gate. */
+            const response = await fetch("/api/visitor/imports", {
                 method: "POST",
                 body: form
             });
-
-            if (handleAuthFailure(response)) {
-                return;
-            }
 
             const result = await response.json();
 
@@ -5270,12 +5323,14 @@
 
         try {
 
-            const response = await fetch("/api/approvals?status=pending");
+            /* The visitor approval route, not the guarded /api/approvals:
+               it serves this browser its own copy of the example
+               operations and needs no credential. Opening this panel
+               therefore never shows a sign-in prompt. */
+            const response = await fetch(
+                "/api/visitor/approvals?status=pending"
+            );
             const body = await response.json();
-
-            if (handleAuthFailure(response)) {
-                return;
-            }
 
             if (!body.approvals || !body.approvals.length) {
 
@@ -5347,8 +5402,10 @@
 
         try {
 
+            /* The visitor route: the decision is recorded under this
+               browser's own namespace and needs no credential. */
             const response = await fetch(
-                "/api/approvals/" + id + "/" + action,
+                "/api/visitor/approvals/" + id + "/" + action,
                 { method: "POST" }
             );
 
@@ -5385,7 +5442,12 @@
 
         try {
 
-            const response = await fetch("/api/report", {
+            /* The visitor report route builds the same server-side PDF
+               (schema section, results table, native chart) as the owner
+               route, but resolves any selected import inside this
+               browser's own namespace and needs no credential. The
+               separate client-side "Export PDF" button is unchanged. */
+            const response = await fetch("/api/visitor/report", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -5404,10 +5466,6 @@
                     import_id: selectedImportId || undefined
                 })
             });
-
-            if (handleAuthFailure(response)) {
-                return;
-            }
 
             if (!response.ok) {
 

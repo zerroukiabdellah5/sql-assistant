@@ -32,11 +32,11 @@
 #     count. They cannot change it, because the signature covers it.
 #
 # WHY THE SIGNING KEY IS NOT APP_ACCESS_CODE
-#   The access code is short and human-typed ("1234"). A visitor holds
-#   it, so it is never a secret from the visitor, and a signature keyed
-#   on it could be recomputed offline by anyone holding their own copy -
-#   which would let anyone mint a "0 attempts used" cookie at will. The
-#   signing key is therefore derived from APP_API_KEY (or an explicit
+#   The access code is short and human-typed, and the visitor who holds
+#   it therefore holds that secret too: a signature keyed on it could be
+#   recomputed offline by anyone holding their own copy - which would let
+#   anyone mint a "0 attempts used" cookie at will. The signing key is
+#   therefore derived from APP_API_KEY (or an explicit
 #   ACCESS_SIGNING_SECRET), which the visitor never sees, and it fails
 #   closed with 503 when neither is configured.
 #
@@ -395,8 +395,9 @@ def free_trial_payload(request_id):
     payload = {
         "detail": TRIAL_EXHAUSTED_CODE,
         "message": (
-            f"Your {attempts} free attempts have been used. "
-            "Enter an App Access Code to continue."
+            f"Your free trial of {attempts} questions has ended. "
+            "Enter an App Access Code to continue, or contact "
+            "the owner to request one."
         ),
         "trial_max_attempts": attempts,
         "reference_id": request_id,

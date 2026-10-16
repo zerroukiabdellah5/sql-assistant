@@ -82,16 +82,33 @@ Verified against the current implementation (`app/`):
   sessions; recent turns are passed back to the model as context.
 - **Approval workflow**: risky, non-read-only operations are classified and
   routed for explicit approve/reject rather than executed silently.
-- **Sandboxed uploads**: import `.db` / `.sqlite` / `.sqlite3`, `.sql` and
-  `.xlsx` files into an isolated sandbox; uploads never mix with the main
+- **Sandboxed uploads**: import `.db` / `.sqlite` / `.sqlite3`, `.sql`, `.xlsx`
+  and `.csv` files into an isolated sandbox; uploads never mix with the main
   dataset. Size and row limits apply.
+- **Anonymous per-visitor uploads**: a visitor with no credential can upload
+  and then list, describe, query and delete *their own* imports. Each browser
+  is given a signed `HttpOnly` visitor cookie, and every visitor route
+  resolves strictly inside that visitor's own namespace, so one visitor can
+  never read or touch another's data. The owner `POST /api/upload` /
+  `GET /api/imports` routes stay behind `require_auth`.
+- **Anonymous-safe demo of Sessions, Approvals and PDF reports**: the
+  Sessions, Approvals and PDF-report panels work for any browser with no
+  sign-in. Sessions are stored per browser (`/api/visitor/sessions`), the
+  Approvals panel shows a per-browser copy of clearly *example* operations
+  (`/api/visitor/approvals`), and the server-side report is built from the
+  caller's own request and their own import (`/api/visitor/report`). Owner
+  data is never read: the owner ledgers (`/api/sessions`, `/api/approvals`)
+  and `/api/report` stay behind `require_auth` and are used by scripts.
 - **Client-side CSV export** and **chart visualisation** (Chart.js) of result
   sets.
 - **Server-side PDF reports** generated with ReportLab (tables and native
-  bar charts).
-- **Access control for visitors**: a free trial allowance per browser, after
-  which an App Access Code unlocks a session. The admin API key continues to
-  guard the session, upload, approval and report endpoints.
+  bar charts), plus a **client-side PDF export** of the current result set
+  (a separate, browser-side feature).
+- **Access control for visitors**: six free question attempts per browser,
+  then the access-code dialog on the seventh, and an App Access Code that
+  unlocks a session. Uploading, Sessions, Approvals and PDF reports are *not*
+  gated by the trial or the code. The admin API key continues to guard the
+  owner session, owner-upload, owner-approval and owner-report endpoints.
 - **Provenance and observability**: request correlation IDs, token-usage
   tracking, timing metadata and error sanitisation that never returns raw
   provider, database or filesystem messages.
@@ -123,7 +140,7 @@ Browser (index.html + JS)
         ▼
 FastAPI application  (app/main.py, served by api/index.py on Vercel)
         │
-        ├── Authentication / visitor access   app/auth.py, app/access.py
+        ├── Authentication / visitor access   app/auth.py, app/access.py, app/visitor.py
         ├── Rate limiting + concurrency cap   app/ratelimit.py, app/llm_concurrency.py
         ├── Prompt construction               app/prompts.py
         ├── LLM provider abstraction          app/llm.py
@@ -152,6 +169,7 @@ sql-assistant/
 │   ├── config.py           # Central environment configuration
 │   ├── auth.py             # API-key authentication and signed sessions
 │   ├── access.py           # Visitor trial + App Access Code
+│   ├── visitor.py          # Anonymous per-visitor upload identity
 │   ├── db.py               # Read-only SQLite connection and execution
 │   ├── validate.py         # SQL validation rules
 │   ├── safety.py           # Operation classification (AUTO / APPROVAL)
@@ -161,14 +179,14 @@ sql-assistant/
 │   ├── schema.py           # Schema metadata extraction
 │   ├── history.py          # Sessions and message history
 │   ├── approvals.py        # Approval storage and decisions
-│   ├── uploads.py          # Sandboxed import of .db/.sql/.xlsx
+│   ├── uploads.py          # Sandboxed import of .db/.sql/.xlsx (owner + visitor namespace)
 │   ├── reports.py          # PDF report generation
 │   ├── provenance.py       # Query provenance metadata
 │   ├── correctness.py      # Verification notes
 │   ├── token_usage.py      # Token accounting
 │   ├── observability.py    # Logging, request IDs, error sanitisation
 │   └── ratelimit.py        # Per-instance rate limiting
-├── tests/                  # pytest suite (637 tests)
+├── tests/                  # pytest suite (792 tests)
 ├── public/                 # Brand assets served at the site root
 │   ├── tiix-logo-symbol.png
 │   └── tiix-logo-full.png
@@ -230,8 +248,16 @@ group (which contains pytest), so it is convenient for development.
 
 ### Create the environment file
 
-Create a `.env` file in the repository root. Use placeholders and replace
-them with your own values. **Never commit this file.**
+The repository ships a placeholder template at [`.env.example`](.env.example).
+Copy it and fill in your own values:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`.env` is ignored by Git and excluded from the deployment upload. **Never
+commit it, and never put a real credential in `.env.example`** — that file
+is tracked on purpose and must contain placeholders only.
 
 ```dotenv
 # Required: shared admin secret guarding the /api surface.
@@ -247,11 +273,15 @@ NVIDIA_MODEL=<your-nvidia-model-id>
 # Google Gemini provider (required when LLM_PROVIDER=gemini)
 GEMINI_API_KEY=<your-google-gemini-api-key>
 
-# App Access Code handed to visitors after the free trial
-APP_ACCESS_CODE=<your-app-access-code>
+# App Access Code handed to visitors after the six free attempts.
+# No default: left empty, nobody can unlock until you set one.
+APP_ACCESS_CODE=
 
-# Optional: contact address shown in the unlock modal
-OWNER_CONTACT_EMAIL=<your-contact-email>
+# Free questions per browser before the unlock dialog appears.
+TRIAL_MAX_ATTEMPTS=6
+
+# Contact address shown as a mailto: link in the unlock dialog.
+OWNER_CONTACT_EMAIL=zerroukiabdellah5@gmail.com
 ```
 
 ## Environment Variables
@@ -278,12 +308,147 @@ without a provider configured; only `/api/ask` needs one.
 
 | Name | Default | Purpose |
 |---|---|---|
-| `APP_ACCESS_CODE` | present in source | Code that unlocks access after the free trial. **Change it before any public deployment.** |
+| `APP_ACCESS_CODE` | **unset (fails closed)** | Code that unlocks access after the six free attempts. Deployment configuration: with no code configured, `/api/access/unlock` refuses everything (`401`), so there is no published default to guess. |
 | `ACCESS_SIGNING_SECRET` | derived from `APP_API_KEY` | Optional dedicated signing secret for visitor cookies. |
-| `TRIAL_MAX_ATTEMPTS` | `5` | Free requests per browser. |
+| `TRIAL_MAX_ATTEMPTS` | `6` | Free questions per browser. |
 | `TRIAL_SESSION_TTL_SECONDS` | `2592000` | Lifetime of a part-used free allowance. |
 | `ACCESS_SESSION_TTL_SECONDS` | `43200` | Lifetime of an unlocked visitor session. |
-| `OWNER_CONTACT_EMAIL` | empty | Shown in the unlock modal when set. No mail is sent. |
+| `VISITOR_COOKIE_NAME` | `tiix_visitor` | Name of the signed `HttpOnly` cookie that identifies an anonymous uploader. |
+| `VISITOR_SESSION_TTL_SECONDS` | `2592000` | Lifetime of a visitor upload identity. |
+| `OWNER_CONTACT_EMAIL` | empty | Shown in the unlock dialog as a `mailto:` link. No mail is ever sent by the application. |
+
+### The free trial and the access-code dialog
+
+Every visitor gets **six free question attempts per browser**
+(`TRIAL_MAX_ATTEMPTS=6`), counted in a signed, `HttpOnly` cookie — no
+account, no sign-up, nothing stored server-side.
+
+| | What happens |
+|---|---|
+| Attempts 1–6 | The question is answered normally: schema-aware prompt, generated SQL, validation, read-only execution, results. |
+| Attempt 7 | `/api/ask` answers `403` with the flat body `{"detail": "FREE_TRIAL_EXHAUSTED", ...}`. The frontend keys on that machine-readable value and opens the access-code dialog — it never triggers on page load or on opening a panel. |
+| In the dialog | The message states that the six-use trial has ended and offers the two ways forward: enter an App Access Code, or contact the owner. When `OWNER_CONTACT_EMAIL` is configured, the address is rendered as a clickable `mailto:` link that opens the visitor's own mail client. |
+| Valid code | `/api/access/unlock` checks it in constant time, sets an `HttpOnly` session cookie and drops the trial counter. The visitor keeps asking. |
+| Wrong code | A flat `401` with fixed wording — identical whatever was wrong, so the response cannot be used to probe the code. |
+| Owner with `APP_API_KEY` / a session | Never charged and never locked out; the guarded owner routes (sessions, uploads, approvals, reports) stay behind the application access key. |
+
+**Nothing is sent automatically.** `/api/access/request` accepts and
+validates an email address, stores nothing, sends nothing, and answers
+`notification_sent: false`; requests for a code are honoured by hand,
+through the contact address above.
+
+**The counter is client-held.** Clearing cookies or opening a private
+window starts a fresh allowance — a deliberate trade for running with no
+server-side store. The token is signed, so it can be read but never
+edited to buy attempts back.
+
+### The Upload workflow needs no credential
+
+Clicking **Upload** opens the file picker directly. No sign-in and no App
+Access Code are asked for, and the trial counter is not involved: importing
+is free, and the App Access Code only unlocks free *questions*.
+
+A visitor with no credential uploads through `POST /api/visitor/imports`.
+The first request mints a signed, `HttpOnly` visitor cookie (the browser
+cannot read or edit it), and the file is stored under that visitor's own
+directory. `GET /api/visitor/imports`, `GET /api/visitor/schema` and
+`DELETE /api/visitor/imports/{import_id}` then resolve **only** inside the
+same namespace, so a second browser sees an empty list and gets a `404` for
+anything else — it cannot list, read, query or delete another visitor's
+data. The upload response never includes a server path.
+
+The owner routes `POST /api/upload` and `GET /api/imports` are unchanged and
+remain behind `require_auth`; signing in still uses the native form that
+exchanges the application access key for an `HttpOnly` session cookie. No
+secret is embedded in the frontend and no header is trusted from it.
+
+### Sessions, Approvals and PDF reports need no credential
+
+The three panels that used to sit behind the owner sign-in are served to a
+credential-free browser through the same visitor identity the upload uses, so
+the whole workspace is usable without signing in.
+
+- **Sessions** — `GET|POST /api/visitor/sessions`,
+  `GET|DELETE /api/visitor/sessions/{session_id}`. A session is created,
+  listed, reloaded (with its own message history) and deleted strictly inside
+  the caller's signed visitor id, in a dedicated set of tables that never
+  mixes with the owner's.
+- **Approvals** — `GET /api/visitor/approvals` and
+  `POST /api/visitor/approvals/{approval_id}/approve|reject`. Each browser is
+  seeded, once and idempotently, with a small fixed set of clearly *example*
+  operations (a DDL and two DML items) so the approve/reject flow can be
+  demonstrated end to end. No real owner operation is exposed and no two
+  visitors share a ledger.
+- **PDF report** — `POST /api/visitor/report`. It is the same ReportLab
+  builder as `/api/report`, driven by the caller's own request and resolved
+  against the caller's own import, so it documents the visitor's own query —
+  never the owner's database.
+
+Because these routes resolve in the visitor namespace, one browser can never
+see another's sessions, approvals or report, and none of them can read owner
+state. The owner equivalents (`/api/sessions`, `/api/approvals`,
+`/api/report`) remain behind `require_auth` for scripts.
+
+### Persistent upload storage
+
+The deployment target's only writable space is a per-instance `/tmp`, which
+does not survive a recycle and is not shared between function instances.
+Imports are therefore written through a small storage layer
+(`app/storage.py`) rather than straight to the filesystem. The layer has two
+parts: an **object store** for the file and a **metadata store** for the
+record that names its owner (a visitor namespace or the shared owner
+namespace), kind, tables and object key. A lookup goes through the record,
+so an import resolves only if it was recorded in the same namespace — a
+stray file with a matching name is never enough.
+
+The backend is selected with `STORAGE_BACKEND`:
+
+- **`local`** (default) — a filesystem store, keeping the previous layout.
+  It is what development and the test suite use. On Vercel it is a
+  per-instance `/tmp`, so it is **not durable** and must not be relied on
+  in production.
+- **`r2`** — a durable Cloudflare R2 backend over its S3-compatible API,
+  reached through `boto3`. Configure `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+  `R2_SECRET_ACCESS_KEY` and `R2_BUCKET` (optionally `R2_ENDPOINT`,
+  `R2_REGION`, `R2_PREFIX`). An incomplete configuration is treated as
+  **not configured**.
+
+Any other value, `r2` with incomplete credentials, or `local` while
+`STORAGE_REQUIRE_PERSISTENT` is set, **fails closed** with `503`; the
+application never silently falls back to ephemeral storage. Set
+`STORAGE_REQUIRE_PERSISTENT=1` in production so a lost backend is a loud
+failure rather than silent data loss.
+
+The R2 backend is reached through `boto3`, imported lazily so the local
+backend and the test suite run without it installed. Both interfaces are
+S3: objects keep the same keys the local backend uses, and metadata
+records are JSON objects under `_meta/<scope>/<id>.json`, listed with
+`ListObjectsV2`. Isolation is structural (a record's key begins with its
+scope, and the record's scope is re-checked on every lookup) and there is
+no read-modify-write: a save PUTs one whole document to one key, and S3
+PUT is atomic, so concurrent uploads cannot lose each other's write.
+`materialize` downloads an object to a per-instance cache under
+`UPLOAD_DIR/_cache`, pruned by `UPLOAD_TTL_SECONDS`.
+
+Imports expire after `UPLOAD_TTL_SECONDS` (default `2592000`, 30 days,
+matching the visitor cookie; `0` disables). There is no scheduler: the next
+import in a namespace sweeps that namespace's stale records and their
+objects. `GET /api/version` (protected) reports the storage state as
+`{"backend", "available", "persistent", "require_persistent"}`; the public
+`/health` is unchanged.
+
+**Why uploads are not streamed straight to storage from the browser.** The
+upload reaches the application through its own function, and a Vercel
+function rejects a request body larger than **4.5 MB** (`413
+FUNCTION_PAYLOAD_TOO_LARGE`) before the application sees it, so the
+configured `MAX_UPLOAD_MB=25` is unreachable in production and the effective
+ceiling is the platform's. Lifting it needs a different flow — the browser
+uploading **directly** to object storage under a short-lived,
+namespace-scoped upload authorization issued by the server, after which the
+server records the object key. That flow is deliberately **not implemented
+in this phase**; the upload-size behaviour is unchanged. Permanent storage
+credentials must never reach the browser, and no presigned URL is generated
+by the current code.
 
 ### Optional (safe defaults)
 
@@ -295,7 +460,11 @@ without a provider configured; only `/api/ask` needs one.
 `ACCESS_UNLOCK_RATE_LIMIT_WINDOW_SECONDS`, `ACCESS_REQUEST_RATE_LIMIT_REQUESTS`,
 `ACCESS_REQUEST_RATE_LIMIT_WINDOW_SECONDS`, `LLM_MAX_CONCURRENCY`,
 `LLM_CONCURRENCY_RETRY_AFTER_SECONDS`, `LLM_TIMEOUT_SECONDS`,
-`LLM_RETRY_BACKOFF_CAP_SECONDS`, `META_DB_PATH`, `UPLOAD_DIR`.
+`LLM_RETRY_BACKOFF_CAP_SECONDS`, `META_DB_PATH`, `UPLOAD_DIR`,
+`VISITOR_COOKIE_NAME`, `VISITOR_SESSION_TTL_SECONDS`, `STORAGE_BACKEND`,
+`STORAGE_REQUIRE_PERSISTENT`, `UPLOAD_TTL_SECONDS`, `R2_ACCOUNT_ID`,
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_ENDPOINT`,
+`R2_REGION`, `R2_PREFIX`.
 
 See `app/config.py` for the authoritative definitions and defaults.
 
@@ -342,8 +511,12 @@ python -m pytest -q
 Current status of the suite:
 
 ```
-637 passed
+875 passed, 2 skipped
 ```
+
+The two skipped tests are the opt-in Cloudflare R2 integration tests
+(`tests/test_r2_integration.py`); they run only when dedicated
+`R2_TEST_*` credentials are configured.
 
 ## Deployment Overview
 
@@ -359,7 +532,11 @@ Key points:
   visitor-access settings) are configured in the Vercel project, never in
   Git.
 - Runtime writes fall back to `/tmp` because the deployment filesystem is
-  read-only; sessions and uploads are therefore not durable across instances.
+  read-only. The metadata database is therefore not durable across
+  instances. Imports go through `app/storage.py`; set `STORAGE_BACKEND=r2`
+  with the `R2_*` credentials to make them durable (see
+  [`DEPLOYMENT.md`](DEPLOYMENT.md)), or the backend fails closed (`503`)
+  rather than silently using ephemeral storage.
 
 The full deployment reference — required variables, storage behaviour,
 dependency generation, function-duration considerations and unverified
@@ -384,13 +561,28 @@ The following properties are enforced by the current implementation:
   is logged server-side only.
 - **Secrets are never logged or returned.** `/api/version` reports only
   booleans indicating whether a provider is configured.
-- **No secrets in the repository.** `.env` and `.env*` are ignored by Git and
-  excluded from the deployment upload; `.gitignore` and `.vercelignore`
-  document the intent.
+- **No secrets in the repository.** `.env` and every real `.env*` file are
+  ignored by Git and excluded from the deployment upload; `.gitignore` and
+  `.vercelignore` document the intent. The one exception is
+  `.env.example`, a tracked **placeholder** template with no credential in
+  it.
 - **Layered limits.** Per-instance rate limiting and an LLM concurrency cap
   bound abuse; these are defence-in-depth, not global quotas.
-- **Default access code must be changed.** The App Access Code ships with a
-  default value in source; set `APP_ACCESS_CODE` before any public use.
+- **No default App Access Code.** `APP_ACCESS_CODE` is read from the
+  environment with no fallback: a deployment that forgets it refuses every
+  unlock attempt instead of accepting a value published in this
+  repository. The six free attempts and the trial counter are unaffected,
+  because they are signed with the API key rather than the code.
+- **The demo UI never asks a visitor to sign in, and the trial gate is not a
+  pop-up.** Every panel the interface exposes — query assistant, schema,
+  history, charts, upload, Sessions, Approvals and PDF reports — is served by
+  an unguarded route (`/api/ask`, `/api/public/schema`, or the
+  `/api/visitor/*` namespace), so nothing on page load and no button in the
+  workspace can raise the sign-in dialog. The owner routes
+  (`/api/sessions`, `/api/approvals`, `/api/report`, `/api/upload`,
+  `/api/imports`) still answer `401` to a visitor and remain available to
+  scripts holding `APP_API_KEY`. The access-code dialog opens only when
+  `/api/ask` answers `403 FREE_TRIAL_EXHAUSTED`.
 
 > If a real secret has ever been committed, rotate it and purge it from
 > history — the repository should contain placeholder values only.
@@ -417,4 +609,4 @@ No license file is present in this repository. No license is currently
 specified; all rights are reserved by the author unless a license is added.
 
 
-**Uploads:** Uploaded files are processed in a sandbox and selectable via import_id. Supported formats: .db/.sqlite/.sqlite3, .sql, .xlsx, .csv. Uploads are temporary (Vercel: /tmp/uploads) and not isolated per user (instance-wide, ephemeral). PostgreSQL, MySQL/MariaDB, Oracle, and remote DB connections are not supported yet.
+**Uploads:** Uploaded files are processed in a sandbox and selectable via import_id. Supported formats: .db/.sqlite/.sqlite3, .sql, .xlsx, .csv. Imports are written through a storage layer (`app/storage.py`) with a pluggable backend: `local` (filesystem, the development/test default and per-instance `/tmp` on Vercel, **not durable**) and `r2` (Cloudflare R2 over its S3-compatible API, configured with `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`). Selecting an unimplemented backend, configuring `r2` without credentials, or requiring persistence with only `local`, fails closed with `503` instead of silently degrading. Anonymous uploads are isolated per browser: each visitor holds a signed HttpOnly cookie and every `/api/visitor/*` route resolves only inside that visitor's own namespace, so one visitor cannot list, read, query or delete another's data. Owner uploads (`/api/upload`, `/api/imports`) remain application-wide and behind `require_auth`. A Vercel function caps a request body at 4.5 MB regardless of `MAX_UPLOAD_MB`; raising the limit needs a direct-to-object-storage upload flow (not implemented in this phase). PostgreSQL, MySQL/MariaDB, Oracle, and remote DB connections are not supported yet.

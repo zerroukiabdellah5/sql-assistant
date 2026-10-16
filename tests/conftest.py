@@ -115,6 +115,30 @@ def no_app_secret(monkeypatch):
     return None
 
 
+# The application ships NO default App Access Code: an unset code means
+# nobody can unlock, which is the fail-closed behaviour production
+# requires (app/config.py). Tests that exercise the unlock flow therefore
+# configure their own throwaway code, so nothing here depends on the
+# operator's environment and no real code ever enters the suite.
+TEST_ACCESS_CODE = "test-only-access-code"
+
+
+@pytest.fixture(autouse=True)
+def configured_access_code(monkeypatch):
+    """Give the test process a private App Access Code.
+
+    Applied to every test so the value is always well defined - including
+    in assertions that the code never leaks into a response. A test that
+    needs the UNSET state overrides this by setting the attribute back to
+    an empty string inside the test body, which runs after this fixture.
+    """
+
+    import app.config as config
+
+    monkeypatch.setattr(config, "APP_ACCESS_CODE", TEST_ACCESS_CODE)
+    return TEST_ACCESS_CODE
+
+
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
     """Isolate the process-wide rate limiter between tests.

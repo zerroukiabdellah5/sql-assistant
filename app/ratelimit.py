@@ -441,6 +441,41 @@ def rate_limit_visitor(scope, limit, window_seconds):
     return dependency
 
 
+def rate_limit_by_visitor(scope, limit, window_seconds):
+    """Build a dependency limiting an anonymous visitor route.
+
+    The visitor upload routes are reachable by a browser with no
+    credential at all, so neither ``rate_limit`` (which derives its
+    identity from require_auth) nor ``rate_limit_visitor`` (which derives
+    it from require_ask_access and would refuse an exhausted visitor)
+    fits. Identity comes from the signed visitor cookie instead, so one
+    browser's uploads cannot spend another's allowance.
+
+    require_visitor is declared as a sub-dependency: it runs first, mints
+    the cookie when the browser has none, and its id is what the limiter
+    counts. FastAPI caches the dependency, so the handler sees the same
+    id. Everything else - the same process-wide limiter, the same scope
+    isolation, the same 429 plus Retry-After, and the same
+    fail-closed-on-error behaviour - is identical to every other route.
+    """
+
+    from app.visitor import require_visitor
+
+    def dependency(
+        request: Request,
+        visitor_id: str = Depends(require_visitor),
+    ):
+
+        _enforce(
+            _digest(visitor_id),
+            scope,
+            limit,
+            window_seconds,
+        )
+
+    return dependency
+
+
 def _enforce(identity, scope, limit, window_seconds):
     """Apply the limit, or raise 429 with a Retry-After header."""
 
