@@ -1,4 +1,5 @@
-"""The Upload workflow: the picker opens and the owner route stays owner-only.
+"""The Upload workflow: the dialog opens, the picker waits, and the owner
+route stays owner-only.
 
 Reported defect: a visitor who clicked Upload was shown the
 "This workspace is protected - sign in" dialog. That dialog is the
@@ -278,18 +279,31 @@ def test_the_owner_routes_did_not_become_public():
 # THE FRONTEND CONTRACT
 # ============================================================
 
-def test_clicking_upload_opens_the_file_picker_directly(
+def test_clicking_upload_opens_the_dialog_not_the_file_picker(
     index_source
 ):
+    """The dialog opens first; the picker waits for the Browse button.
+
+    The regression this guards: openWorkspace('upload') used to call
+    openUploadPicker() on the way in, so the OS picker opened the moment
+    Upload was clicked - and, because the backdrop closed on any click
+    that reached it, the dialog never stayed visible. Opening Upload now
+    only opens the dialog and loads the stored imports; the picker is
+    reached solely through the Browse button inside the dialog.
+    """
+
     body = _function_body(index_source, "openWorkspace")
 
     assert 'which === "upload"' in body
-    assert "openUploadPicker()" in body
+    assert "loadImports()" in body
+    assert "openUploadPicker()" not in body
 
     picker = _function_body(index_source, "openUploadPicker")
 
     assert 'getElementById("uploadInput")' in picker
     assert ".click()" in picker
+
+    assert "openUploadPicker()" in index_source
 
 
 def test_opening_the_upload_panel_never_opens_a_dialog(index_source):

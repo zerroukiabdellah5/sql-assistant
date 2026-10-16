@@ -469,8 +469,12 @@
         .ws-source-tag { padding: 4px 8px; border-radius: 999px; font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--success); background: rgba(53, 214, 160, .1); border: 1px solid rgba(53, 214, 160, .24); white-space: nowrap; }
         .ws-source-tag.is-import { color: var(--warning); background: rgba(251, 191, 36, .08); border-color: rgba(251, 191, 36, .24); }
         .ws-upload-zone { border: 1.5px dashed var(--border-strong); border-radius: 13px; padding: 14px; background: var(--inset); transition: .18s var(--ease); }
-        .ws-upload-zone:hover { border-color: var(--border-hover); }
-        .ws-file-input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-soft); color: var(--text-soft); font-size: 12px; }
+        .ws-upload-zone:hover, .ws-upload-zone.drag { border-color: var(--border-hover); background: var(--wash); }
+        .ws-upload-zone.drag .ws-upload-hint { color: var(--text); }
+        .ws-file-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+        .ws-upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .ws-upload-name { color: var(--text-soft); font-family: "JetBrains Mono", monospace; font-size: 11px; word-break: break-all; }
+        .ws-upload-hint { color: var(--muted-2); font-size: 11px; margin: 0; }
         .ws-hint { color: var(--muted-2); font-family: "JetBrains Mono", monospace; font-size: 10px; margin-top: 8px; line-height: 1.6; }
         .approval-sql { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--muted); background: var(--inset); border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; margin: 8px 0 10px; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; }
         .ws-mono { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--muted); }
@@ -732,6 +736,7 @@
                             <option value="">Default database (store.db)</option>
                         </select>
                         <span id="sourceTag" class="ws-source-tag" title="Active data source">Default DB</span>
+                        <button id="useDefaultBtn" type="button" class="export-btn secondary" onclick="useDefaultSource()" title="Switch back to the local store.db" hidden>Use store.db</button>
                     </div>
                     <button class="export-btn" onclick="openWorkspace('sessions')">Sessions</button>
                     <button class="export-btn secondary" onclick="openWorkspace('upload')">Upload</button>
@@ -889,7 +894,7 @@
 <div id="toast" class="toast">Done</div>
 
 <!-- ================= SESSIONS PANEL ================= -->
-<div id="sessionsBackdrop" class="palette-backdrop" onclick="closeWorkspace(event, 'sessions')">
+<div id="sessionsBackdrop" class="palette-backdrop" onclick="closeWorkspaceOnBackdrop(event, 'sessions')">
     <div class="workspace-palette">
         <div class="workspace-head">
             <div class="panel-title">Persistent Sessions</div>
@@ -901,16 +906,22 @@
 </div>
 
 <!-- ================= UPLOAD PANEL ================= -->
-<div id="uploadBackdrop" class="palette-backdrop" onclick="closeWorkspace(event, 'upload')">
+<div id="uploadBackdrop" class="palette-backdrop" onclick="closeWorkspaceOnBackdrop(event, 'upload')">
     <div class="workspace-palette">
         <div class="workspace-head">
             <div class="panel-title">Sandboxed Import</div>
             <button class="export-btn secondary" onclick="closeWorkspace(event, 'upload')">Close</button>
         </div>
-        <div class="ws-upload-zone">
+        <div class="ws-upload-zone" id="uploadZone">
             <label class="sr-only" for="uploadInput">Choose a database, SQL script, Excel or CSV file</label>
             <input id="uploadInput" class="ws-file-input" type="file"
-                   accept=".db,.sqlite,.sqlite3,.sql,.xlsx,.csv">
+                   accept=".db,.sqlite,.sqlite3,.sql,.xlsx,.csv"
+                   onchange="onUploadFileSelected()">
+            <div class="ws-upload-row">
+                <button type="button" class="export-btn secondary" onclick="openUploadPicker()">Browse&hellip;</button>
+                <span id="uploadFileName" class="ws-upload-name">No file chosen</span>
+            </div>
+            <p class="ws-upload-hint" id="uploadDropHint" style="margin-top:10px;">or drop a file here</p>
             <button class="export-btn mt-4" onclick="handleUpload()">Import file</button>
             <p class="ws-hint">Accepted: .db / .sqlite / .sqlite3 / .sql / .xlsx / .csv<br>
                 Files are copied into an isolated sandbox. SQL scripts run only inside a
@@ -927,7 +938,7 @@
 </div>
 
 <!-- ================= APPROVALS PANEL ================= -->
-<div id="approvalsBackdrop" class="palette-backdrop" onclick="closeWorkspace(event, 'approvals')">
+<div id="approvalsBackdrop" class="palette-backdrop" onclick="closeWorkspaceOnBackdrop(event, 'approvals')">
     <div class="workspace-palette">
         <div class="workspace-head">
             <div class="panel-title">Approval Required</div>
@@ -4677,6 +4688,7 @@
     updateLineNumbers();
     loadLiveSchema();
     updateSourceIndicators();
+    setupUploadDropZone();
     /* =====================================================
        WORKSPACE — SESSIONS / UPLOAD / APPROVALS / SERVER PDF
     ===================================================== */
@@ -4691,11 +4703,10 @@
             /* The import list and the picker both use the visitor
                upload routes, so they work for anyone: the list is keyed
                to this browser's signed visitor cookie and needs no
-               credential, and the file picker opens straight away in
-               this same click. No sign-in gate is ever opened from
-               here. */
+               credential. The dialog opens first; the file picker is
+               opened only by the Browse button inside it, never on the
+               way in. No sign-in gate is ever opened from here. */
             loadImports();
-            openUploadPicker();
         } else if (which === "approvals") {
             loadApprovals();
         }
@@ -4706,11 +4717,31 @@
             /* Cleared first so re-picking the same file still counts
                as a choice. */
             input.value = "";
+            onUploadFileSelected();
             input.click();
+        }
+    }
+    function onUploadFileSelected() {
+        const input = document.getElementById("uploadInput");
+        const nameEl = document.getElementById("uploadFileName");
+        const file = input && input.files && input.files[0];
+        if (nameEl) {
+            nameEl.textContent = file ? file.name : "No file chosen";
         }
     }
     function closeWorkspace(event, which) {
         event.stopPropagation();
+        document.getElementById(
+            which + "Backdrop"
+        ).classList.remove("open");
+    }
+    function closeWorkspaceOnBackdrop(event, which) {
+        /* Only the dim area outside the palette closes the dialog: a
+           click that bubbles up from inside it (the Browse button, the
+           file input, Import, a Use button) must not dismiss it. */
+        if (event.target !== event.currentTarget) {
+            return;
+        }
         document.getElementById(
             which + "Backdrop"
         ).classList.remove("open");
@@ -4759,6 +4790,20 @@
                 : "Querying the default database (store.db)";
             tag.classList.toggle("is-import", isImport);
         }
+        const useDefault = document.getElementById("useDefaultBtn");
+        if (useDefault) {
+            /* Offered only once an import is active, so the way back to
+               store.db is always one click away. */
+            useDefault.hidden = !selectedImportId;
+        }
+    }
+    async function useDefaultSource() {
+        setActiveSource("", null);
+        resetResultsForSourceChange();
+        sessionHistory = [];
+        await loadLiveSchema();
+        loadImports();
+        showToast("Source: store.db");
     }
     function resetResultsForSourceChange() {
         lastResultData = [];
@@ -5220,17 +5265,27 @@
 
         const file = input.files && input.files[0];
 
-        if (!file) {
-
-            showToast("Choose a file first");
-            return;
-        }
-
         const resultBox =
             document.getElementById("uploadResult");
 
+        if (!file) {
+
+            showToast("Choose a file first");
+
+            if (resultBox) {
+                resultBox.innerHTML =
+                    '<div class="history-empty">No file selected. Use ' +
+                    "Browse to choose a .db, .sqlite, .sql, .xlsx or " +
+                    ".csv file.</div>";
+            }
+
+            return;
+        }
+
         resultBox.innerHTML =
-            '<div class="history-empty thinking">Importing sandbox...</div>';
+            '<div class="history-empty thinking">Importing ' +
+            escapeHtml(file.name) +
+            "&hellip;</div>";
 
         const form = new FormData();
         form.append("file", file);
@@ -5245,7 +5300,7 @@
                 body: form
             });
 
-            const result = await response.json();
+            const result = await response.json().catch(() => ({}));
 
             if (!response.ok) {
                 throw new Error(result.detail || "Import failed.");
@@ -5262,12 +5317,23 @@
                       .join("")
                 : "";
 
+            const useButton = result.id
+                ? '<button type="button" class="export-btn" ' +
+                  'onclick="useUploadedImport(' +
+                  "'" + result.id + "'" +
+                  ')">Use this database</button>'
+                : "";
+
             resultBox.innerHTML =
-                '<div class="panel-title">' +
+                '<div class="history-empty" ' +
+                'style="color: var(--accent-ink);">Imported ' +
+                escapeHtml(result.filename) +
+                " successfully.</div>" +
+                '<div class="panel-title" style="margin-top:10px;">' +
                 escapeHtml(result.filename) +
                 "</div>" +
                 '<div class="ws-mono" style="margin-top:6px">' +
-                result.kind.toUpperCase() +
+                (result.kind || "import").toUpperCase() +
                 " · " +
                 result.table_count +
                 " tables · " +
@@ -5278,30 +5344,69 @@
                 "</div>" +
                 '<div class="approval-sql">' +
                 escapeHtml(result.schema_text) +
+                "</div>" +
+                '<div class="ws-upload-row" style="margin-top:10px;">' +
+                useButton +
                 "</div>";
 
-            showToast("Imported into sandbox");
+            showToast("Imported " + result.filename);
 
-            /* Make the freshly imported file the active source, then
-               rebuild the stored-import list and the schema from it. */
-            if (result.id) {
-                setActiveSource(result.id, {
-                    id: result.id,
-                    filename: result.filename,
-                    kind: result.kind
-                });
-                await loadImports();
-                resetResultsForSourceChange();
-                await loadLiveSchema();
-            } else {
-                await loadImports();
-            }
+            /* Refresh the stored-import list so the new file appears with
+               its own Use button. The active source is deliberately left
+               untouched: the imported database becomes the source only
+               when the user clicks Use, never automatically. */
+            await loadImports();
+
         } catch (error) {
 
-            resultBox.innerHTML = "";
+            resultBox.innerHTML =
+                '<div class="history-empty">Could not import ' +
+                escapeHtml(file.name) +
+                ": " +
+                escapeHtml(error.message || "unknown error") +
+                "</div>";
 
-            showToast(error.message);
+            showToast(error.message || "Import failed.");
         }
+    }
+    async function useUploadedImport(id) {
+        if (!id) {
+            return;
+        }
+        await useImport(id);
+        document.getElementById(
+            "uploadBackdrop"
+        ).classList.remove("open");
+    }
+    function setupUploadDropZone() {
+        const zone = document.getElementById("uploadZone");
+        const input = document.getElementById("uploadInput");
+        if (!zone || !input) {
+            return;
+        }
+        const stop = event => {
+            event.preventDefault();
+            event.stopPropagation();
+        };
+        ["dragenter", "dragover"].forEach(evt =>
+            zone.addEventListener(evt, event => {
+                stop(event);
+                zone.classList.add("drag");
+            })
+        );
+        ["dragleave", "dragend", "drop"].forEach(evt =>
+            zone.addEventListener(evt, event => {
+                stop(event);
+                zone.classList.remove("drag");
+            })
+        );
+        zone.addEventListener("drop", event => {
+            const files = event.dataTransfer && event.dataTransfer.files;
+            if (files && files.length) {
+                input.files = files;
+                onUploadFileSelected();
+            }
+        });
     }
 
 
