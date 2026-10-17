@@ -10,7 +10,7 @@
 
 <p align="center">
   <img alt="Python 3.13" src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white">
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.141-009688?logo=fastapi&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.141.1-009688?logo=fastapi&logoColor=white">
   <img alt="Deployed on Vercel" src="https://img.shields.io/badge/Deployed-Vercel-000000?logo=vercel&logoColor=white">
 </p>
 
@@ -30,6 +30,61 @@ data: people understand the questions they want to ask but not the SQL needed
 to answer them. TIIX SQL Studio bridges that gap while keeping the safety
 properties of a read-only database tool — the generated query is never
 allowed to mutate data.
+
+## Project Evolution: Before and During October 2026
+
+TIIX SQL Studio was not created in October. The application already existed
+before October 2026, and October was a phase of expansion on top of that
+foundation. Everything in this section is taken from this repository's own
+Git history; each commit ID below was checked against `git log`.
+
+### Before October 2026 — Original Foundation
+
+- **September 19, 2026 — `445bf8c`, initial project.** A FastAPI application
+  over a SQLite dataset (`store.db`, `database.py`), natural-language
+  questions translated into SQL by a language model (Google Gemini at this
+  stage), `SELECT`-only validation, schema awareness, conversational context,
+  and a web interface that already displayed results with charts and CSV
+  export. `vercel.json` and `requirements.txt` were present from the first
+  commit.
+- **September 19, 2026 — `fa01850`, Vercel/FastAPI deployment fix.**
+- **September 26, 2026 — `a2d864d`, deployment preparation.** The code moved
+  into the `app/` package, the pytest suite started, and the read-only
+  safeguards still in force today were introduced there: SQLite `mode=ro`
+  connections and `EXPLAIN QUERY PLAN` checks (`app/db.py`).
+- **September 26, 2026 — `7d2166d`, dependency fix.** Vercel dependency
+  resolution repaired and the production environment locked.
+
+By the end of September the project already had its purpose (natural language
+to validated, read-only SQL), its FastAPI/SQLite architecture, its interface
+and its deployment setup.
+
+### During October 2026 — Expansion of That Foundation
+
+- **October 3, 2026 — `643854d`, security, provenance, correctness and LLM
+  concurrency.** API-key authentication with fail-closed behaviour, signed
+  sessions, execution provenance, verification notes, token accounting,
+  observability, per-instance rate limiting and an LLM concurrency cap.
+- **October 3, 2026 — `4cadeaa`, release build for Vercel.**
+- **October 8, 2026 — `2243e4a`, enriched demo data** (`seed_demo_data.py`).
+- **October 9, 2026 — `93bb6a2`, logo assets served on Vercel and contact
+  email updated.**
+- **October 15, 2026 — `bfae50b`, analytics and CSV import support**
+  (`app/analytics.py`, `app/metrics.py`).
+- **October 16, 2026 — `a66db32`, anonymous visitor demo and pluggable upload
+  storage** (`app/visitor.py`, `app/storage.py`).
+- **October 16, 2026 — `682404b`, upload dialog and database import flow
+  restored.**
+- **October 16, 2026 — `7d98f86`, review-before-run workflow and report
+  hardening.** `POST /api/run` was added, splitting generation from execution
+  into **Generate → Review/Edit → Run**, with signed generation tickets
+  (`app/generation_ticket.py`) that record how the reviewed SQL came to exist.
+
+**Key distinction:** October changed how safely and how transparently results
+are produced, and how users review SQL before it runs; it did not change the
+project's original natural-language-to-SQL purpose. Provenance records *how* a
+result was produced — it does not guarantee that a query answers the question
+it was asked, which is one reason the review step exists.
 
 ## Problem Statement
 
@@ -89,11 +144,18 @@ Verified against the current implementation (`app/`):
   UI without exposing rows or credentials.
 - **Multi-turn sessions and history**: create, list, view and delete
   sessions; recent turns are passed back to the model as context.
-- **Approval workflow**: risky, non-read-only operations are classified and
-  routed for explicit approve/reject rather than executed silently.
+- **Approval ledger**: operations are classified `AUTO`/`APPROVAL`
+  (`app/safety.py`), and approve/reject decisions are recorded in a ledger —
+  for the owner through the protected `POST /api/approvals` route, and for any
+  browser through a clearly-example visitor demo (`/api/visitor/approvals`).
+  The ledger is review bookkeeping: nothing is queued into it automatically,
+  approved SQL is never executed by the application, and in practice risky
+  SQL cannot run at all — validation rejects every non-`SELECT`/`WITH`
+  statement before any execution path.
 - **Sandboxed uploads**: import `.db` / `.sqlite` / `.sqlite3`, `.sql`, `.xlsx`
   and `.csv` files into an isolated sandbox; uploads never mix with the main
-  dataset. Size and row limits apply.
+  dataset, and the import a request works against is chosen per request with
+  `import_id`. Size and row limits apply.
 - **Anonymous per-visitor uploads**: a visitor with no credential can upload
   and then list, describe, query and delete *their own* imports. Each browser
   is given a signed `HttpOnly` visitor cookie, and every visitor route
@@ -133,34 +195,44 @@ Verified against the current implementation (`app/`):
 | ASGI server (local) | Uvicorn |
 | Data validation | Pydantic |
 | Database | SQLite (standard library `sqlite3`) |
-| LLM providers | NVIDIA (OpenAI-compatible API), Google Gemini |
+| LLM providers | NVIDIA (OpenAI-compatible API, via the `openai` client), Google Gemini (via `google-genai`) |
+| Object storage (optional) | boto3 (Cloudflare R2 backend, `STORAGE_BACKEND=r2`) |
 | Documents | ReportLab (PDF), openpyxl (Excel import) |
+| File uploads | python-multipart (multipart form parsing) |
 | Configuration | python-dotenv |
 | Frontend | Static HTML/CSS/JavaScript, Chart.js (CDN) |
 | Testing | pytest |
 | Deployment | Vercel (Python serverless functions) |
 | Dependency management | uv (`uv.lock`), pinned `requirements.txt` |
 
+**Database support:** only SQLite — the bundled dataset plus uploaded sandbox
+files — is supported. PostgreSQL, MySQL/MariaDB, Oracle and other remote
+database connections are not supported yet.
+
 ## Architecture
 
 ```
-Browser (index.html + JS)
-        │  HTTP
-        ▼
+Browser (index.html + JavaScript)
+    |
+    | HTTP
+    v
 FastAPI application  (app/main.py, served by api/index.py on Vercel)
-        │
-        ├── Authentication / visitor access   app/auth.py, app/access.py, app/visitor.py
-        ├── Rate limiting + concurrency cap   app/ratelimit.py, app/llm_concurrency.py
-        ├── Prompt construction               app/prompts.py
-        ├── LLM provider abstraction          app/llm.py
-        ├── SQL validation + safety gate      app/validate.py, app/safety.py
-        ├── Read-only execution               app/db.py  (SQLite, mode=ro)
-        ├── Schema metadata                   app/schema.py
-        ├── Sessions / history / approvals    app/history.py, app/approvals.py
-        ├── Uploads (sandboxed)               app/uploads.py
-        ├── Reports (PDF)                     app/reports.py
-        └── Provenance / observability        app/provenance.py, app/observability.py,
-                                              app/token_usage.py, app/correctness.py
+    |
+    +-- Configuration                      app/config.py
+    +-- Authentication / visitor access    app/auth.py, app/access.py, app/visitor.py
+    +-- Rate limiting + concurrency        app/ratelimit.py, app/llm_concurrency.py
+    +-- Prompt construction                app/prompts.py
+    +-- LLM provider abstraction           app/llm.py
+    +-- SQL validation + safety gate       app/validate.py, app/safety.py
+    +-- Read-only execution                app/db.py  (SQLite, mode=ro)
+    +-- Schema metadata                    app/schema.py
+    +-- Sessions / history / approvals     app/history.py, app/approvals.py
+    +-- Sandboxed uploads + storage        app/uploads.py, app/storage.py
+    +-- Analytics                          app/analytics.py, app/metrics.py
+    +-- Reports (PDF)                      app/reports.py
+    +-- Provenance / correctness           app/provenance.py, app/correctness.py,
+                                           app/token_usage.py, app/observability.py,
+                                           app/generation_ticket.py
 ```
 
 The local development server and the Vercel deployment both serve the **same**
@@ -171,50 +243,56 @@ it, so local and deployed behaviour cannot drift apart.
 
 ```
 sql-assistant/
-├── api/
-│   └── index.py            # Vercel serverless entrypoint; re-exports app.main:app
-├── app/                    # Application package
-│   ├── main.py             # FastAPI app, routes, startup
-│   ├── config.py           # Central environment configuration
-│   ├── auth.py             # API-key authentication and signed sessions
-│   ├── access.py           # Visitor trial + App Access Code
-│   ├── visitor.py          # Anonymous per-visitor upload identity
-│   ├── db.py               # Read-only SQLite connection and execution
-│   ├── validate.py         # SQL validation rules
-│   ├── safety.py           # Operation classification (AUTO / APPROVAL)
-│   ├── llm.py              # Provider abstraction (NVIDIA, Gemini)
-│   ├── llm_concurrency.py  # Per-instance LLM concurrency cap
-│   ├── prompts.py          # Prompt construction
-│   ├── schema.py           # Schema metadata extraction
-│   ├── history.py          # Sessions and message history
-│   ├── approvals.py        # Approval storage and decisions
-│   ├── uploads.py          # Sandboxed import of .db/.sql/.xlsx (owner + visitor namespace)
-│   ├── reports.py          # PDF report generation
-│   ├── provenance.py       # Query provenance metadata
-│   ├── correctness.py      # Verification notes
-│   ├── token_usage.py      # Token accounting
-│   ├── observability.py    # Logging, request IDs, error sanitisation
-│   └── ratelimit.py        # Per-instance rate limiting
-├── tests/                  # pytest suite (792 tests)
-├── public/                 # Brand assets served at the site root
-│   ├── tiix-logo-symbol.png
-│   └── tiix-logo-full.png
-├── assets/                 # Source logo assets
-├── index.html              # Main workspace UI
-├── about.html              # About page
-├── contact.html            # Contact page
-├── privacy.html            # Privacy page
-├── main.py                 # Local entrypoint → app.main.run()
-├── database.py             # Demo dataset schema setup
-├── seed_demo_data.py       # Optional demo-data generator
-├── store.db                # Tracked, read-only demo dataset
-├── requirements.txt        # Pinned production dependencies (generated)
-├── pyproject.toml          # Project metadata and dependency groups
-├── uv.lock                 # Locked dependency graph
-├── .python-version         # Interpreter pin (3.13)
-├── vercel.json             # Vercel build and routing configuration
-├── .vercelignore           # Files excluded from the deployment upload
-└── DEPLOYMENT.md           # Deployment reference (see below)
+|-- api/
+|   \-- index.py            # Vercel serverless entrypoint; re-exports app.main:app
+|-- app/                    # Application package
+|   |-- __init__.py
+|   |-- main.py             # FastAPI app, routes, startup
+|   |-- config.py           # Central environment configuration
+|   |-- auth.py             # API-key authentication and signed sessions
+|   |-- access.py           # Visitor trial + App Access Code
+|   |-- visitor.py          # Anonymous per-visitor upload identity
+|   |-- db.py               # Read-only SQLite connection and execution
+|   |-- validate.py         # SQL validation rules
+|   |-- safety.py           # Operation classification (AUTO / APPROVAL)
+|   |-- llm.py              # Provider abstraction (NVIDIA, Gemini)
+|   |-- llm_concurrency.py  # Per-instance LLM concurrency cap
+|   |-- prompts.py          # Prompt construction
+|   |-- schema.py           # Schema metadata extraction
+|   |-- history.py          # Sessions and message history
+|   |-- approvals.py        # Approval storage and decisions
+|   |-- uploads.py          # Sandboxed import of .db/.sql/.xlsx/.csv (owner + visitor namespace)
+|   |-- storage.py          # Pluggable upload storage backends (local, r2)
+|   |-- analytics.py        # Chart planning and numeric analysis of results
+|   |-- metrics.py          # Result metrics used by analytics and reports
+|   |-- reports.py          # PDF report generation
+|   |-- provenance.py       # Query provenance metadata
+|   |-- correctness.py      # Verification notes
+|   |-- generation_ticket.py # Signed generation tickets (generated/edited/manual)
+|   |-- token_usage.py      # Token accounting
+|   |-- observability.py    # Logging, request IDs, error sanitisation
+|   \-- ratelimit.py        # Per-instance rate limiting
+|-- tests/                  # pytest suite (983 tests: 981 passing, 2 skipped)
+|-- public/                 # Brand assets served at the site root
+|   |-- tiix-logo-symbol.png
+|   \-- tiix-logo-full.png
+|-- assets/                 # Source logo assets
+|-- index.html              # Main workspace UI
+|-- about.html              # About page
+|-- contact.html            # Contact page
+|-- privacy.html            # Privacy page
+|-- main.py                 # Local entrypoint -> app.main.run()
+|-- database.py             # Demo dataset schema setup
+|-- seed_demo_data.py       # Optional demo-data generator
+|-- store.db                # Tracked, read-only demo dataset
+|-- requirements.txt        # Pinned production dependencies (generated)
+|-- pyproject.toml          # Project metadata and dependency groups
+|-- uv.lock                 # Locked dependency graph
+|-- .python-version         # Interpreter pin (3.13)
+|-- .env.example            # Tracked placeholder environment template
+|-- vercel.json             # Vercel build and routing configuration
+|-- .vercelignore           # Files excluded from the deployment upload
+\-- DEPLOYMENT.md           # Deployment reference (see below)
 ```
 
 ## Prerequisites
@@ -332,7 +410,7 @@ Every visitor gets **six free question attempts per browser**
 (`TRIAL_MAX_ATTEMPTS=6`), counted in a signed, `HttpOnly` cookie — no
 account, no sign-up, nothing stored server-side.
 
-| | What happens |
+| Situation | What happens |
 |---|---|
 | Attempts 1–6 | The question is answered normally: schema-aware prompt, generated SQL, validation. The signed generation ticket that comes back then lets the visitor **run** that SQL (reviewed or edited) against the read-only database. |
 | Running the SQL | `POST /api/run` executes the reviewed statement and is **free**: it costs no attempt, because no provider is called. A visitor qualifies to run once they have generated at least one statement; a visitor who has never generated gets `403 {"detail": "RUN_REQUIRES_GENERATION"}`. |
@@ -451,19 +529,20 @@ objects. `GET /api/version` (protected) reports the storage state as
 upload reaches the application through its own function, and a Vercel
 function rejects a request body larger than **4.5 MB** (`413
 FUNCTION_PAYLOAD_TOO_LARGE`) before the application sees it, so the
-configured `MAX_UPLOAD_MB=25` is unreachable in production and the effective
-ceiling is the platform's. Lifting it needs a different flow — the browser
-uploading **directly** to object storage under a short-lived,
-namespace-scoped upload authorization issued by the server, after which the
-server records the object key. That flow is deliberately **not implemented
-in this phase**; the upload-size behaviour is unchanged. Permanent storage
-credentials must never reach the browser, and no presigned URL is generated
-by the current code.
+`MAX_UPLOAD_MB=25` limit defined in `app/config.py` is unreachable in
+production and the effective ceiling is the platform's. Lifting it needs a
+different flow — the browser uploading **directly** to object storage under a
+short-lived, namespace-scoped upload authorization issued by the server, after
+which the server records the object key. That flow is deliberately **not
+implemented in this phase**; the upload-size behaviour is unchanged. Permanent
+storage credentials must never reach the browser, and no presigned URL is
+generated by the current code.
 
 ### Optional (safe defaults)
 
 `NVIDIA_BASE_URL`, `AUTH_COOKIE_NAME`, `AUTH_SESSION_TTL_SECONDS`,
-`AUTH_COOKIE_SECURE`, `APP_RATE_LIMIT_ENABLED`, `ASK_RATE_LIMIT_REQUESTS`,
+`AUTH_COOKIE_SECURE`, `ACCESS_COOKIE_NAME`, `TRIAL_COOKIE_NAME`,
+`APP_RATE_LIMIT_ENABLED`, `ASK_RATE_LIMIT_REQUESTS`,
 `ASK_RATE_LIMIT_WINDOW_SECONDS`, `RUN_RATE_LIMIT_REQUESTS`,
 `RUN_RATE_LIMIT_WINDOW_SECONDS`, `LOGIN_RATE_LIMIT_REQUESTS`,
 `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `UPLOAD_RATE_LIMIT_REQUESTS`,
@@ -500,7 +579,7 @@ Open that URL in a browser. Useful endpoints:
 | `GET /` | Main workspace UI |
 | `GET /health` | Liveness check |
 | `GET /about`, `/contact`, `/privacy` | Informational pages |
-| `GET /api/version` | Version and provider-configured flags |
+| `GET /api/version` | Version, provider-configured flags and storage state (protected) |
 | `GET /api/schema` | Schema metadata (protected) |
 | `POST /api/ask` | Generation endpoint: natural-language question → SQL + signed ticket. Never executes. |
 | `POST /api/run` | Execution endpoint: reviewed SQL → rows, provenance and chart. Never calls a provider and never charges a trial attempt. |
@@ -523,7 +602,7 @@ python -m pytest -q
 Current status of the suite:
 
 ```
-981 passed, 2 skipped
+983 collected: 981 passed, 2 skipped
 ```
 
 The two skipped tests are the opt-in Cloudflare R2 integration tests
@@ -572,7 +651,9 @@ The following properties are enforced by the current implementation:
   are replaced with a generic message plus a reference ID; the real traceback
   is logged server-side only.
 - **Secrets are never logged or returned.** `/api/version` reports only
-  booleans indicating whether a provider is configured.
+  application metadata — the provider name, booleans for whether each
+  provider is configured, and the storage state — never a path, environment
+  variable or credential.
 - **No secrets in the repository.** `.env` and every real `.env*` file are
   ignored by Git and excluded from the deployment upload; `.gitignore` and
   `.vercelignore` document the intent. The one exception is
@@ -606,8 +687,8 @@ folder (for example `docs/screenshot-workspace.png`) and embed them here.
 
 ## Contributors
 
-**Abdellah Zerrouki** — project author and sole contributor (confirmed by
-Git history).
+**Abdellah Zerrouki** — project author and sole contributor. All 14 commits
+in this repository share a single Git author (handle `Abdoutiix92`).
 
 Responsibilities: application design and implementation (FastAPI routes,
 authentication and visitor access, SQL validation and read-only execution,
@@ -619,6 +700,3 @@ the Vercel deployment configuration.
 
 No license file is present in this repository. No license is currently
 specified; all rights are reserved by the author unless a license is added.
-
-
-**Uploads:** Uploaded files are processed in a sandbox and selectable via import_id. Supported formats: .db/.sqlite/.sqlite3, .sql, .xlsx, .csv. Imports are written through a storage layer (`app/storage.py`) with a pluggable backend: `local` (filesystem, the development/test default and per-instance `/tmp` on Vercel, **not durable**) and `r2` (Cloudflare R2 over its S3-compatible API, configured with `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`). Selecting an unimplemented backend, configuring `r2` without credentials, or requiring persistence with only `local`, fails closed with `503` instead of silently degrading. Anonymous uploads are isolated per browser: each visitor holds a signed HttpOnly cookie and every `/api/visitor/*` route resolves only inside that visitor's own namespace, so one visitor cannot list, read, query or delete another's data. Owner uploads (`/api/upload`, `/api/imports`) remain application-wide and behind `require_auth`. A Vercel function caps a request body at 4.5 MB regardless of `MAX_UPLOAD_MB`; raising the limit needs a direct-to-object-storage upload flow (not implemented in this phase). PostgreSQL, MySQL/MariaDB, Oracle, and remote DB connections are not supported yet.
